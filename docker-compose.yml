@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # 1. Backend FastAPI
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SMTP_HOST=smtp.example.com
+      - SMTP_PORT=587
+      - SMTP_USER=user@example.com
+      - SMTP_PASSWORD=email_password
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: on-failure
+
+  # 2. Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # 3. PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: legal-diff-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=legal_diff_user
+      - POSTGRES_PASSWORD=dev123
+      - POSTGRES_DB=legal_diff
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal_diff_user -d legal_diff"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # 4. Redis (for Celery)
+  redis:
+    image: redis:7-alpine
+    container_name: legal-diff-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 5. Celery Worker (for LLM tasks)
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - api
+      - db
+      - redis
+    restart: on-failure
+
+volumes:
+  postgres_data:
+

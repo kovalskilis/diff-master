@@ -1,0 +1,41 @@
+# FastAPI and server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Authentication
+fastapi-users[sqlalchemy]>=13.0.0
+fastapi-users-db-sqlalchemy>=6.0.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt>=4.0.1
+
+# Email
+aiosmtplib==3.0.1
+email-validator==2.1.0
+
+# Async tasks
+celery==5.3.6
+redis==5.0.1
+
+# Document processing
+python-docx==1.1.0
+openpyxl==3.1.2
+
+# LLM
+langchain==0.3.13
+langchain-openai==0.2.14
+openai==1.58.1
+langchain-core==0.3.28
+
+# Utils
+python-dotenv==1.0.0
+pydantic==2.10.6
+pydantic-settings==2.7.1
+

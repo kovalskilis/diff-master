@@ -1,0 +1,56 @@
+# Docker Compose для локальной разработки
+# Запускает только инфраструктуру: PostgreSQL, Redis
+# Backend и Frontend запускаются локально для hot-reload
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: legal-diff-db-dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=legal_diff_user
+      - POSTGRES_PASSWORD=dev123
+      - POSTGRES_DB=legal_diff
+    ports:
+      - "5432:5432"  # Открыт для локального Backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal_diff_user -d legal_diff"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis (for Celery)
+  redis:
+    image: redis:7-alpine
+    container_name: legal-diff-redis-dev
+    ports:
+      - "6379:6379"  # Открыт для локального Backend
+    restart: unless-stopped
+
+  # Celery Worker (в Docker), код монтируется из ./backend
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: legal-diff-worker-dev
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    environment:
+      # Переопределяем URL для контейнерной сети
+      - DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+
