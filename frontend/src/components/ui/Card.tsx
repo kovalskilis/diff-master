@@ -30,19 +30,19 @@ export const Card = ({ children, className, hover = false, onClick }: CardProps)
 };
 
 export const CardHeader = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <div className={cn('border-b border-apple-gray-100 pb-4 mb-4', className)}>
+  <div className={cn('border-b border-apple-gray-100 dark:border-apple-gray-700 pb-4 mb-4', className)}>
     {children}
   </div>
 );
 
 export const CardTitle = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <h3 className={cn('text-xl font-semibold text-apple-gray-900', className)}>
+  <h3 className={cn('text-xl font-semibold text-apple-gray-900 dark:text-apple-gray-50', className)}>
     {children}
   </h3>
 );
 
 export const CardDescription = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <p className={cn('text-sm text-apple-gray-600 mt-1', className)}>
+  <p className={cn('text-sm text-apple-gray-600 dark:text-apple-gray-400 mt-1', className)}>
     {children}
   </p>
 );

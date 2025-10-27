@@ -106,11 +106,11 @@ export const DocumentPage = () => {
       </div>
     );
   }
-
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-apple-gray-200 sticky top-0 z-30">
+      <header className="bg-white/80 dark:bg-apple-gray-800/80 backdrop-blur-xl border-b border-apple-gray-200 dark:border-apple-gray-700 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
             <Button
@@ -121,10 +121,10 @@ export const DocumentPage = () => {
               Назад
             </Button>
             <div className="flex-1">
-              <h1 className="text-xl font-semibold text-apple-gray-900">
+              <h1 className="text-xl font-semibold text-apple-gray-900 dark:text-apple-gray-50">
                 {document.name}
               </h1>
-              <p className="text-sm text-apple-gray-600">
+              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">
                 Базовый документ
               </p>
             </div>

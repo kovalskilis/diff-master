@@ -29,20 +29,18 @@ export const useAuthStore = create<AuthState>()(
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      // Client-side guard: bcrypt accepts up to 72 bytes
-      const pwdBytes = new TextEncoder().encode(password).length;
-      if (password.length < 8) {
-        throw { response: { data: { message: 'Пароль должен содержать минимум 8 символов' } } };
-      }
-      if (pwdBytes > 72) {
-        throw { response: { data: { message: 'Пароль не может быть длиннее 72 байт' } } };
-      }
       const data = await authAPI.login(email, password);
       const token = data.access_token;
       localStorage.setItem('token', token);
       
       const user = await authAPI.getMe();
+      console.log('Login successful, user:', user, 'token:', token);
       set({ user, token, isAuthenticated: true, isLoading: false });
+      console.log('State updated with isAuthenticated: true');
+      
+      // Force state synchronization with localStorage
+      const currentState = useAuthStore.getState();
+      console.log('Current state after set:', currentState);
     } catch (error: any) {
       const data = error?.response?.data;
       const msg = data?.message || data?.detail || (Array.isArray(data?.errors) ? data.errors.map((e: any) => (e.field ? `${e.field}: ${e.message}` : e.message)).join(', ') : null) || 'Ошибка входа';
@@ -54,14 +52,6 @@ export const useAuthStore = create<AuthState>()(
   register: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      // Client-side guard: bcrypt accepts up to 72 bytes
-      const pwdBytes = new TextEncoder().encode(password).length;
-      if (password.length < 8) {
-        throw { response: { data: { message: 'Пароль должен содержать минимум 8 символов' } } };
-      }
-      if (pwdBytes > 72) {
-        throw { response: { data: { message: 'Пароль не может быть длиннее 72 байт' } } };
-      }
       await authAPI.register(email, password);
       set({ isLoading: false });
     } catch (error: any) {
@@ -111,14 +101,14 @@ export const useAuthStore = create<AuthState>()(
 
   clearError: () => set({ error: null }),
     }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ 
-        token: state.token, 
-        isAuthenticated: state.isAuthenticated,
-        user: state.user 
-      }),
-    }
+  {
+    name: 'auth-storage',
+    partialize: (state) => ({ 
+      token: state.token, 
+      isAuthenticated: state.isAuthenticated,
+      user: state.user 
+    }),
+  }
   )
 );
 

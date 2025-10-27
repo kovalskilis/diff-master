@@ -17,7 +17,7 @@ export const EditsPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [extractedEdits, setExtractedEdits] = useState<ExtractedEdits | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { showToast } = useToast();
+  const { success, error: errorToast } = useToast();
 
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
@@ -27,10 +27,10 @@ export const EditsPage: React.FC = () => {
 
       const response = await documentsAPI.extractEdits(formData);
       setExtractedEdits(response);
-      showToast('Правки успешно извлечены', 'success');
-    } catch (error) {
-      console.error('Error extracting edits:', error);
-      showToast('Ошибка при извлечении правок', 'error');
+      success('Правки успешно извлечены');
+    } catch (err) {
+      console.error('Error extracting edits:', err);
+      errorToast('Ошибка при извлечении правок');
     } finally {
       setIsUploading(false);
     }
@@ -45,16 +45,16 @@ export const EditsPage: React.FC = () => {
       // In a real app, you'd select which document to apply edits to
       const documentId = 1; // This should come from document selection
 
-      const response = await documentsAPI.processApprovedEdits({
+      await documentsAPI.processApprovedEdits({
         articles,
         document_id: documentId
       });
 
-      showToast('Правки отправлены на обработку', 'success');
+      success('Правки отправлены на обработку');
       setExtractedEdits(null);
-    } catch (error) {
-      console.error('Error processing approved edits:', error);
-      showToast('Ошибка при обработке правок', 'error');
+    } catch (err) {
+      console.error('Error processing approved edits:', err);
+      errorToast('Ошибка при обработке правок');
     } finally {
       setIsProcessing(false);
     }
@@ -91,19 +91,18 @@ export const EditsPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-apple-gray-50 mb-4">
           Загрузка правок
         </h1>
-        <p className="text-gray-600 text-lg">
+        <p className="text-gray-600 dark:text-apple-gray-400 text-lg">
           Загрузите файл с правками для предварительного просмотра и согласования
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-8">
+      <div className="bg-white dark:bg-apple-gray-800 rounded-lg shadow-lg p-8">
         <FileUpload
-          onFileSelect={handleFileUpload}
-          accept=".docx,.txt"
-          disabled={isUploading}
+          onUpload={handleFileUpload}
+          isLoading={isUploading}
         />
         
         {isUploading && (
@@ -113,7 +112,7 @@ export const EditsPage: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-8 text-sm text-gray-500">
+        <div className="mt-8 text-sm text-gray-500 dark:text-apple-gray-400">
           <h3 className="font-semibold mb-2">Поддерживаемые форматы:</h3>
           <ul className="list-disc list-inside space-y-1">
             <li><strong>.docx</strong> - документы Microsoft Word</li>
@@ -121,7 +120,7 @@ export const EditsPage: React.FC = () => {
           </ul>
           
           <h3 className="font-semibold mb-2 mt-4">Ожидаемый формат:</h3>
-          <div className="bg-gray-50 p-3 rounded text-xs font-mono">
+          <div className="bg-gray-50 dark:bg-apple-gray-700 p-3 rounded text-xs font-mono">
             <div>Статья 1</div>
             <div className="ml-4">1) В пункте 7 статьи 6.1:</div>
             <div className="ml-8">а) слова "рабочий день" дополнить...</div>

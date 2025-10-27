@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileText, Upload, Plus, Trash2, LogOut, Eye } from 'lucide-react';
+import { FileText, Upload, Plus, Trash2, LogOut, Eye, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -11,6 +11,7 @@ import { DocumentStructure } from '@/components/ui/DocumentStructure';
 import { DeletingWidget } from '@/components/ui/DeletingWidget';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { useThemeStore } from '@/hooks/useTheme';
 import { useToast } from '@/hooks/useToast';
 import { documentsAPI } from '@/services/api';
 import type { Document } from '@/types';
@@ -18,7 +19,8 @@ import type { Document } from '@/types';
 export const DashboardPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { toasts, removeToast, success, error } = useToast();
+  const { theme, toggleTheme } = useThemeStore();
+  const { toasts, removeToast, success } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -49,9 +51,9 @@ export const DashboardPage = () => {
       setSelectedDocument(newDoc); // Show structure of newly uploaded document
       setIsUploadModalOpen(false);
       success('Документ загружен', `Файл "${file.name}" успешно загружен`);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      error('Ошибка загрузки', 'Не удалось загрузить документ');
+    } catch (err) {
+      console.error('Upload failed:', err);
+      success('Ошибка загрузки', 'Не удалось загрузить документ');
     } finally {
       setIsUploading(false);
     }
@@ -68,9 +70,9 @@ export const DashboardPage = () => {
       await new Promise(resolve => setTimeout(resolve, 300));
       setDocuments(prev => prev.filter(d => d.id !== id));
       success('Документ удален', `"${document?.name}" успешно удален`);
-    } catch (error) {
-      console.error('Delete failed:', error);
-      error('Ошибка удаления', 'Не удалось удалить документ');
+    } catch (err) {
+      console.error('Delete failed:', err);
+      success('Ошибка удаления', 'Не удалось удалить документ');
     } finally {
       setDeletingId(null);
     }
@@ -82,22 +84,32 @@ export const DashboardPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-apple-gray-200 sticky top-0 z-30">
+      <header className="bg-white/80 dark:bg-apple-gray-800/80 backdrop-blur-xl border-b border-apple-gray-200 dark:border-apple-gray-700 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-apple-blue rounded-xl">
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-apple-gray-900">Legal Diff</h1>
-              <p className="text-sm text-apple-gray-600">{user?.email}</p>
+              <h1 className="text-xl font-semibold text-apple-gray-900 dark:text-apple-gray-50">Legal Diff</h1>
+              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">{user?.email}</p>
             </div>
           </div>
-          <Button variant="ghost" onClick={handleLogout} icon={<LogOut />}>
-            Выйти
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={toggleTheme}
+              className="p-2"
+              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </Button>
+            <Button variant="ghost" onClick={handleLogout} icon={<LogOut />}>
+              Выйти
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -110,10 +122,10 @@ export const DashboardPage = () => {
         >
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-3xl font-bold text-apple-gray-900 mb-2">
+              <h2 className="text-3xl font-bold text-apple-gray-900 dark:text-apple-gray-50 mb-2">
                 Мои документы
               </h2>
-              <p className="text-apple-gray-600">
+              <p className="text-apple-gray-600 dark:text-apple-gray-400">
                 Загрузите базовый документ для начала работы
               </p>
             </div>
@@ -169,9 +181,17 @@ export const DashboardPage = () => {
                         </div>
                         <div className="flex gap-2">
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              setSelectedDocument(doc);
+                              // Always load fresh document with structure
+                              try {
+                                const fullDoc = await documentsAPI.get(doc.id);
+                                setSelectedDocument(fullDoc);
+                              } catch (error) {
+                                console.error('Failed to load document structure:', error);
+                                // Fallback to cached document
+                                setSelectedDocument(doc);
+                              }
                             }}
                             className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Показать структуру"
@@ -233,8 +253,13 @@ export const DashboardPage = () => {
         description="Просмотр структуры документа по статьям"
         size="xl"
       >
-        {selectedDocument && selectedDocument.structure && (
+        {selectedDocument && selectedDocument.structure && Object.keys(selectedDocument.structure).length > 0 && (
           <DocumentStructure structure={selectedDocument.structure} />
+        )}
+        {selectedDocument && selectedDocument.structure && Object.keys(selectedDocument.structure).length === 0 && (
+          <div className="text-center py-8 text-apple-gray-500">
+            <p>Структура пуста (0 статей)</p>
+          </div>
         )}
         {selectedDocument && !selectedDocument.structure && (
           <div className="text-center py-8 text-apple-gray-500">

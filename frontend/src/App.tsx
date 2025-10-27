@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { useThemeStore } from '@/hooks/useTheme';
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -26,12 +27,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   const { checkAuth, isLoading, isAuthenticated, token } = useAuthStore();
+  const { setTheme } = useThemeStore();
 
   useEffect(() => {
     // Check auth on app load if we have a token
     if (token && !isAuthenticated) {
       checkAuth();
     }
+    
+    // Initialize theme
+    setTheme(useThemeStore.getState().theme);
   }, []); // Only run once on mount
 
   // If we have a token but are not authenticated, we're in a loading state

@@ -61,10 +61,37 @@ export const authAPI = {
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
-    const response = await api.post('/auth/jwt/login', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
+    
+    try {
+      const response = await api.post('/auth/jwt/login', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error: any) {
+      // If CORS error, try with credentials in a different way
+      if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
+        console.log('CORS error detected, trying alternative method');
+        
+        // Use fetch directly with credentials
+        const formDataFetch = new FormData();
+        formDataFetch.append('username', email);
+        formDataFetch.append('password', password);
+        
+        const fetchResponse = await fetch('http://localhost:8000/auth/jwt/login', {
+          method: 'POST',
+          body: formDataFetch,
+          credentials: 'include',
+          mode: 'cors',
+        });
+        
+        if (fetchResponse.ok) {
+          const data = await fetchResponse.json();
+          console.log('Login successful via fetch:', data);
+          return data;
+        }
+      }
+      throw error;
+    }
   },
 
   register: async (email: string, password: string) => {
@@ -190,6 +217,19 @@ export const editsAPI = {
   updateTarget: async (targetId: number, confirmedTaxUnitId: number): Promise<EditTarget> => {
     const response = await api.put(`/api/edits/target/${targetId}`, {
       confirmed_tax_unit_id: confirmedTaxUnitId,
+    });
+    return response.data;
+  },
+
+  deleteTarget: async (targetId: number) => {
+    await api.delete(`/api/edits/target/${targetId}`);
+  },
+
+  createTarget: async (workspaceFileId: number, instructionText: string, articleId: number): Promise<EditTarget> => {
+    const response = await api.post(`/api/edits/target`, {
+      workspace_file_id: workspaceFileId,
+      instruction_text: instructionText,
+      article_id: articleId,
     });
     return response.data;
   },

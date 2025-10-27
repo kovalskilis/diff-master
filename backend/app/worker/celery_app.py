@@ -1,12 +1,12 @@
 from celery import Celery
 
-from config import settings
-
 import sys
 from pathlib import Path
 
-# Add app directory to path for imports
+# Add app directory to path for imports (must be before importing config!)
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from config import settings
 
 celery_app = Celery(
     "legal_diff_worker",

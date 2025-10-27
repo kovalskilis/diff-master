@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react';
 
@@ -18,12 +18,9 @@ interface ToastProps {
 }
 
 const ToastComponent: React.FC<ToastProps> = ({ toast, onRemove }) => {
-  const [isVisible, setIsVisible] = useState(true);
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(() => onRemove(toast.id), 300);
+      onRemove(toast.id);
     }, toast.duration || 5000);
 
     return () => clearTimeout(timer);
@@ -71,10 +68,7 @@ const ToastComponent: React.FC<ToastProps> = ({ toast, onRemove }) => {
           )}
         </div>
         <button
-          onClick={() => {
-            setIsVisible(false);
-            setTimeout(() => onRemove(toast.id), 300);
-          }}
+          onClick={() => onRemove(toast.id)}
           className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600"
         >
           <XCircle className="w-4 h-4" />

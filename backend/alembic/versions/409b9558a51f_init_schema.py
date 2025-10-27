@@ -166,6 +166,22 @@ def upgrade() -> None:
     op.create_index(op.f('ix_patched_fragment_id'), 'patched_fragment', ['id'], unique=False)
     op.create_index(op.f('ix_patched_fragment_tax_unit_id'), 'patched_fragment', ['tax_unit_id'], unique=False)
     op.create_index(op.f('ix_patched_fragment_user_id'), 'patched_fragment', ['user_id'], unique=False)
+    
+    # ### Create test user ###
+    # Хэш для пароля "test" (bcrypt)
+    # Вставляем тестового пользователя с UUID
+    op.execute("""
+        INSERT INTO "user" (id, email, hashed_password, is_active, is_superuser, is_verified)
+        VALUES (
+            gen_random_uuid(),
+            'test@test.com',
+            '$2b$12$BCSlnfxoRP1MjgkKmoPU3.JOIS/amA.fckmav37GV5T959vtjL2yG',
+            true,
+            false,
+            true
+        )
+        ON CONFLICT (email) DO NOTHING;
+    """)
     # ### end Alembic commands ###
 
 
@@ -211,4 +227,7 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS editjobstatus;")
     op.execute("DROP TYPE IF EXISTS changetype;")
     op.execute("DROP TYPE IF EXISTS taxunittype;")
+    
+    # ### Delete test user ###
+    op.execute("DELETE FROM \"user\" WHERE email = 'test@test.com';")
     # ### end Alembic commands ###

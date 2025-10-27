@@ -8,7 +8,7 @@ from openpyxl.styles import Font, Alignment, PatternFill
 import uuid
 
 from models.document import (
-    Snapshot, TaxUnitVersion, PatchedFragment, TaxUnit
+    Snapshot, ArticleVersion, PatchedFragment, TaxUnit, Article
 )
 
 
@@ -32,8 +32,8 @@ class ExportService:
         
         # Get all versions for this snapshot
         result = await self.session.execute(
-            select(TaxUnitVersion).where(
-                TaxUnitVersion.snapshot_id == snapshot_id
+            select(ArticleVersion).where(
+                ArticleVersion.snapshot_id == snapshot_id
             )
         )
         versions = result.scalars().all()
@@ -41,12 +41,14 @@ class ExportService:
         # Build text
         text_parts = []
         for version in versions:
-            tax_unit = version.tax_unit
+            article = version.article
+            article_title = f"Статья {article.article_number}" if article else "Статья"
             text_parts.append(f"\n{'='*80}\n")
-            text_parts.append(f"{tax_unit.breadcrumbs_path}\n")
-            text_parts.append(f"{tax_unit.title}\n")
+            text_parts.append(f"{article_title}\n")
+            if article and article.title:
+                text_parts.append(f"{article.title}\n")
             text_parts.append(f"{'-'*80}\n")
-            text_parts.append(f"{version.text_content}\n")
+            text_parts.append(f"{version.content}\n")
         
         return ''.join(text_parts)
     
@@ -57,24 +59,25 @@ class ExportService:
         
         # Get all versions for this snapshot
         result = await self.session.execute(
-            select(TaxUnitVersion).where(
-                TaxUnitVersion.snapshot_id == snapshot_id
+            select(ArticleVersion).where(
+                ArticleVersion.snapshot_id == snapshot_id
             )
         )
         versions = result.scalars().all()
         
         for version in versions:
-            tax_unit = version.tax_unit
+            article = version.article
             
-            # Add breadcrumbs
-            doc.add_paragraph(tax_unit.breadcrumbs_path, style='Heading 3')
+            # Add article number
+            article_title = f"Статья {article.article_number}" if article and article.article_number else "Статья"
+            doc.add_paragraph(article_title, style='Heading 3')
             
             # Add title
-            if tax_unit.title:
-                doc.add_paragraph(tax_unit.title, style='Heading 4')
+            if article and article.title:
+                doc.add_paragraph(article.title, style='Heading 4')
             
             # Add content
-            doc.add_paragraph(version.text_content)
+            doc.add_paragraph(version.content)
         
         # Save to bytes
         buffer = io.BytesIO()
@@ -139,10 +142,20 @@ class ExportService:
         
         # Fill data
         for idx, fragment in enumerate(fragments, start=2):
-            tax_unit = fragment.tax_unit
+            # Get article instead of tax_unit
+            if fragment.article_id:
+                article_result = await self.session.execute(
+                    select(Article).where(Article.id == fragment.article_id)
+                )
+                article = article_result.scalar_one_or_none()
+            else:
+                article = None
+            
+            # Use article number or fallback
+            breadcrumbs = f"Статья {article.article_number}" if article and article.article_number else ""
             
             ws.cell(row=idx, column=1, value=idx-1)  # №
-            ws.cell(row=idx, column=2, value=tax_unit.breadcrumbs_path or "")  # ИЗМЕНЯЕМАЯ НОРМА
+            ws.cell(row=idx, column=2, value=breadcrumbs)  # ИЗМЕНЯЕМАЯ НОРМА
             ws.cell(row=idx, column=3, value=fragment.before_text or "")  # ДЕЙСТВУЮЩАЯ НОРМА
             ws.cell(row=idx, column=4, value=fragment.after_text or "")  # НОВАЯ НОРМА
             ws.cell(row=idx, column=5, value="")  # ДАТА (заполняется вручную)

@@ -44,8 +44,8 @@ export const FileUpload = ({
         className={cn(
           'border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-200',
           isDragActive
-            ? 'border-apple-blue bg-apple-blue/5'
-            : 'border-apple-gray-300 hover:border-apple-blue',
+            ? 'border-apple-blue bg-apple-blue/5 dark:bg-apple-blue/10'
+            : 'border-apple-gray-300 dark:border-apple-gray-600 hover:border-apple-blue',
           isLoading && 'opacity-50 cursor-not-allowed'
         )}
       >
@@ -54,14 +54,14 @@ export const FileUpload = ({
         {isLoading ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-12 h-12 border-3 border-apple-blue border-t-transparent rounded-full animate-spin" />
-            <p className="text-apple-gray-600">Загрузка...</p>
+            <p className="text-apple-gray-600 dark:text-apple-gray-400">Загрузка...</p>
           </div>
         ) : acceptedFiles.length > 0 ? (
           <div className="flex flex-col items-center gap-4">
             <File className="w-12 h-12 text-apple-blue" />
             <div>
-              <p className="font-medium text-apple-gray-900">{acceptedFiles[0].name}</p>
-              <p className="text-sm text-apple-gray-500">
+              <p className="font-medium text-apple-gray-900 dark:text-apple-gray-50">{acceptedFiles[0].name}</p>
+              <p className="text-sm text-apple-gray-500 dark:text-apple-gray-400">
                 {(acceptedFiles[0].size / 1024).toFixed(2)} KB
               </p>
             </div>
@@ -70,13 +70,13 @@ export const FileUpload = ({
           <div className="flex flex-col items-center gap-4">
             <Upload className="w-12 h-12 text-apple-gray-400" />
             <div>
-              <p className="font-medium text-apple-gray-900">
+              <p className="font-medium text-apple-gray-900 dark:text-apple-gray-50">
                 {isDragActive ? 'Отпустите файл' : 'Перетащите файл сюда'}
               </p>
-              <p className="text-sm text-apple-gray-500 mt-1">
+              <p className="text-sm text-apple-gray-500 dark:text-apple-gray-400 mt-1">
                 или нажмите для выбора
               </p>
-              <p className="text-xs text-apple-gray-400 mt-2">
+              <p className="text-xs text-apple-gray-400 dark:text-apple-gray-500 mt-2">
                 Поддерживаются .docx и .txt файлы (до 10 МБ)
               </p>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
 
@@ -88,16 +88,16 @@ const ArticleEdit: React.FC<ArticleEditProps> = ({ articleNum, content, onEdit }
   };
 
   return (
-    <Card className="p-4 mb-4">
+    <Card className="p-4 mb-4 dark:bg-apple-gray-800">
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold text-gray-800">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-apple-gray-50">
           {articleNum === 'unknown' ? 'Неизвестные правки' : `Статья ${articleNum}`}
         </h3>
         <div className="flex gap-2">
           {!isEditing ? (
             <Button
               onClick={() => setIsEditing(true)}
-              variant="outline"
+              variant="secondary"
               size="sm"
             >
               Редактировать
@@ -106,14 +106,14 @@ const ArticleEdit: React.FC<ArticleEditProps> = ({ articleNum, content, onEdit }
             <>
               <Button
                 onClick={handleSave}
-                variant="default"
+                variant="primary"
                 size="sm"
               >
                 Сохранить
               </Button>
               <Button
                 onClick={handleCancel}
-                variant="outline"
+                variant="secondary"
                 size="sm"
               >
                 Отмена
@@ -127,11 +127,11 @@ const ArticleEdit: React.FC<ArticleEditProps> = ({ articleNum, content, onEdit }
         <textarea
           value={editedContent}
           onChange={(e) => setEditedContent(e.target.value)}
-          className="w-full h-64 p-3 border border-gray-300 rounded-md font-mono text-sm"
+          className="w-full h-64 p-3 border border-gray-300 dark:border-apple-gray-600 dark:bg-apple-gray-700 dark:text-apple-gray-50 rounded-md font-mono text-sm"
           placeholder="Введите содержимое статьи..."
         />
       ) : (
-        <div className="bg-gray-50 rounded-md p-3 font-mono text-sm">
+        <div className="bg-gray-50 dark:bg-apple-gray-700 rounded-md p-3 font-mono text-sm">
           {parseContent(content)}
         </div>
       )}
@@ -147,7 +147,18 @@ export const EditsReview: React.FC<EditsReviewProps> = ({
   totalArticles,
   hasUnknown
 }) => {
-  const [editedArticles, setEditedArticles] = useState<Record<string, string>>(articles);
+  // Initialize once with articles prop
+  const [editedArticles, setEditedArticles] = useState<Record<string, string>>(() => articles);
+  const initializedRef = useRef(false);
+
+  // Reset when articles prop changes (new file uploaded)
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    setEditedArticles(articles);
+  }, [articles]);
 
   const handleArticleEdit = (articleNum: string, content: string) => {
     setEditedArticles(prev => ({
@@ -167,15 +178,15 @@ export const EditsReview: React.FC<EditsReviewProps> = ({
   });
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6 bg-white dark:bg-apple-gray-900 min-h-screen">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-apple-gray-50 mb-2">
           Обзор правок
         </h2>
-        <div className="text-gray-600 space-y-1">
+        <div className="text-gray-600 dark:text-apple-gray-400 space-y-1">
           <p><strong>Файл:</strong> {filename}</p>
           <p><strong>Найдено статей:</strong> {totalArticles}</p>
-          {hasUnknown && <p className="text-orange-600"><strong>Внимание:</strong> Есть правки без указания статьи</p>}
+          {hasUnknown && <p className="text-orange-600 dark:text-orange-400"><strong>Внимание:</strong> Есть правки без указания статьи</p>}
         </div>
       </div>
 
@@ -190,16 +201,16 @@ export const EditsReview: React.FC<EditsReviewProps> = ({
         ))}
       </div>
 
-      <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
+      <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200 dark:border-apple-gray-700">
         <Button
           onClick={onCancel}
-          variant="outline"
+          variant="secondary"
         >
           Отмена
         </Button>
         <Button
           onClick={handleApprove}
-          variant="default"
+          variant="primary"
           className="bg-green-600 hover:bg-green-700"
         >
           Подтвердить и отправить на обработку

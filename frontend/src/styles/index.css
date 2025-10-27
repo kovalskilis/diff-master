@@ -8,7 +8,7 @@
   }
   
   body {
-    @apply bg-white text-apple-gray-900 antialiased;
+    @apply bg-white text-apple-gray-900 dark:bg-apple-gray-900 dark:text-apple-gray-50 antialiased;
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -44,7 +44,7 @@
   
   /* Apple-style card */
   .card-apple {
-    @apply bg-white rounded-2xl shadow-apple p-6
+    @apply bg-white dark:bg-apple-gray-800 dark:text-apple-gray-50 rounded-2xl shadow-apple p-6
            transition-all duration-300
            hover:shadow-apple-lg;
   }

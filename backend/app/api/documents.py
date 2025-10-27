@@ -8,9 +8,8 @@ from pydantic import BaseModel
 from database import get_async_session
 from auth import current_active_user
 from models.user import User
-from models.document import BaseDocument, TaxUnit, TaxUnitVersion, Snapshot, AuditLog, AuditAction
-from schemas.document import BaseDocumentResponse, TaxUnitResponse, TaxUnitHierarchyResponse
-from services.document_parser import DocumentParser
+from models.document import BaseDocument, Article, Snapshot, AuditLog, AuditAction, ArticleVersion
+from schemas.document import BaseDocumentResponse, ArticleResponse, TaxUnitHierarchyResponse
 from services.audit_service import AuditService
 from services.parsing import parse_document_structure, parse_txt_structure, extract_edits_for_review
 
@@ -64,18 +63,23 @@ async def import_document(
     base_doc = BaseDocument(
         user_id=user.id,
         name=file.filename,
-        source_type=source_type,
-        structure=structure
+        source_type=source_type
     )
     session.add(base_doc)
     await session.flush()
     
-    # Parse document into tax units
-    parser = DocumentParser()
-    tax_units = await parser.parse_document(content, source_type, base_doc.id, user.id)
+    # Create Article records from structure
+    if structure:
+        for article_number, article_data in structure.items():
+            article = Article(
+                base_document_id=base_doc.id,
+                article_number=article_number,
+                title=article_data.get('title'),
+                content=article_data.get('content', '')
+            )
+            session.add(article)
     
-    for tax_unit in tax_units:
-        session.add(tax_unit)
+    await session.flush()
     
     # Create initial snapshot
     snapshot = Snapshot(
@@ -86,17 +90,25 @@ async def import_document(
     session.add(snapshot)
     await session.flush()
     
-    # Create versions for all tax units
-    for tax_unit in tax_units:
-        version = TaxUnitVersion(
-            tax_unit_id=tax_unit.id,
-            snapshot_id=snapshot.id,
-            text_content=tax_unit.title or "",
-            created_by_user_id=user.id
-        )
-        session.add(version)
-        await session.flush()
-        tax_unit.current_version_id = version.id
+    # Create versions for all articles
+    if structure:
+        for article_number, article_data in structure.items():
+            # Get article
+            result = await session.execute(
+                select(Article).where(
+                    Article.base_document_id == base_doc.id,
+                    Article.article_number == article_number
+                )
+            )
+            article = result.scalar_one_or_none()
+            
+            if article:
+                version = ArticleVersion(
+                    article_id=article.id,
+                    snapshot_id=snapshot.id,
+                    content=article_data.get('content', '')
+                )
+                session.add(version)
     
     # Audit log
     await AuditService.log_action(
@@ -109,7 +121,17 @@ async def import_document(
     await session.commit()
     await session.refresh(base_doc)
     
-    return base_doc
+    # Return document with structure for frontend compatibility
+    document_dict = {
+        "id": base_doc.id,
+        "name": base_doc.name,
+        "source_type": base_doc.source_type,
+        "imported_at": base_doc.imported_at,
+        "structure": structure if structure else {}
+    }
+    
+    
+    return document_dict
 
 
 @router.get("/documents", response_model=List[BaseDocumentResponse])
@@ -122,7 +144,46 @@ async def list_documents(
         select(BaseDocument).where(BaseDocument.user_id == user.id)
     )
     documents = result.scalars().all()
-    return documents
+    
+    # Build structure for each document
+    document_list = []
+    for doc in documents:
+        try:
+            # Get articles for this document
+            articles_result = await session.execute(
+                select(Article).where(Article.base_document_id == doc.id)
+            )
+            articles = articles_result.scalars().all()
+            
+            structure = {}
+            for article in articles:
+                structure[article.article_number] = {
+                    "title": article.title or "",
+                    "content": article.content
+                }
+            
+            
+            document_dict = {
+                "id": doc.id,
+                "name": doc.name,
+                "source_type": doc.source_type,
+                "imported_at": doc.imported_at,
+                "structure": structure
+            }
+            document_list.append(document_dict)
+        except Exception as e:
+            print(f"Error loading structure for document {doc.id}: {e}")
+            # Return document without structure
+            document_dict = {
+                "id": doc.id,
+                "name": doc.name,
+                "source_type": doc.source_type,
+                "imported_at": doc.imported_at,
+                "structure": {}
+            }
+            document_list.append(document_dict)
+    
+    return document_list
 
 
 @router.get("/documents/{document_id}", response_model=BaseDocumentResponse)
@@ -143,16 +204,40 @@ async def get_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    return document
+    # Build structure from articles for compatibility with frontend
+    articles_result = await session.execute(
+        select(Article).where(Article.base_document_id == document_id)
+    )
+    articles = articles_result.scalars().all()
+    
+    # If no articles exist, this is an old document - return empty structure
+    structure = {}
+    if articles:
+        for article in articles:
+            structure[article.article_number] = {
+                "title": article.title or "",
+                "content": article.content
+            }
+    
+    # Add structure to response (for backward compatibility)
+    document_dict = {
+        "id": document.id,
+        "name": document.name,
+        "source_type": document.source_type,
+        "imported_at": document.imported_at,
+        "structure": structure
+    }
+    
+    return document_dict
 
 
-@router.get("/documents/{document_id}/structure", response_model=List[TaxUnitHierarchyResponse])
+@router.get("/documents/{document_id}/structure")
 async def get_document_structure(
     document_id: int,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
-    """Get hierarchical structure of document"""
+    """Get document structure (compatibility endpoint - returns empty for new structure)"""
     # Verify document belongs to user
     result = await session.execute(
         select(BaseDocument).where(
@@ -164,40 +249,17 @@ async def get_document_structure(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # Get all tax units
-    result = await session.execute(
-        select(TaxUnit).where(TaxUnit.base_document_id == document_id)
-    )
-    tax_units = result.scalars().all()
-    
-    # Build hierarchy
-    units_by_id = {unit.id: unit for unit in tax_units}
-    root_units = []
-    
-    for unit in tax_units:
-        if unit.parent_id is None:
-            root_units.append(unit)
-    
-    def build_tree(unit):
-        children = [u for u in tax_units if u.parent_id == unit.id]
-        return TaxUnitHierarchyResponse(
-            id=unit.id,
-            type=unit.type,
-            title=unit.title,
-            breadcrumbs_path=unit.breadcrumbs_path,
-            children=[build_tree(child) for child in children]
-        )
-    
-    return [build_tree(unit) for unit in root_units]
+    # Return empty structure for compatibility (structure is now in /api/documents/{id})
+    return []
 
 
-@router.get("/documents/{document_id}/articles")
+@router.get("/documents/{document_id}/articles", response_model=List[ArticleResponse])
 async def get_document_articles(
     document_id: int,
     session: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user)
 ):
-    """Get parsed articles structure from document"""
+    """Get all articles from document"""
     # Verify document belongs to user
     result = await session.execute(
         select(BaseDocument).where(
@@ -209,10 +271,13 @@ async def get_document_articles(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    return {
-        "document_id": document_id,
-        "structure": document.structure or {}
-    }
+    # Get all articles
+    result = await session.execute(
+        select(Article).where(Article.base_document_id == document_id)
+    )
+    articles = result.scalars().all()
+    
+    return articles
 
 
 @router.post("/edits/extract")
@@ -332,33 +397,32 @@ async def delete_document(
     print(f"[DELETE] Step 2/6: Deleted tax_units in {elapsed:.2f}s")
     
     start = time.time()
-    print(f"[DELETE] Step 3/6: Deleting edit_targets...")
+    print(f"[DELETE] Step 3/6: Deleting patched_fragments...")
+    # First delete patched_fragments (they reference edit_target)
     result = await session.execute(
-        text("""
-            DELETE FROM edit_target 
-            WHERE workspace_file_id IN (
-                SELECT id FROM workspace_file WHERE base_document_id = :doc_id
-            )
-        """).bindparams(doc_id=document_id)
+        text("DELETE FROM patched_fragment WHERE edit_target_id IN (SELECT id FROM edit_target WHERE workspace_file_id IN (SELECT id FROM workspace_file WHERE base_document_id = :doc_id))").bindparams(doc_id=document_id)
     )
+    print(f"[DELETE] Step 3 result: {result.rowcount} patched_fragments deleted")
+    # Also delete patched_fragments by article_id
+    result = await session.execute(
+        text("DELETE FROM patched_fragment WHERE article_id IN (SELECT id FROM article WHERE base_document_id = :doc_id)").bindparams(doc_id=document_id)
+    )
+    print(f"[DELETE] Step 3 result (articles): {result.rowcount} patched_fragments deleted")
     elapsed = time.time() - start
-    print(f"[DELETE] Step 3/6: Deleted edit_targets in {elapsed:.2f}s")
+    print(f"[DELETE] Step 3/6: Deleted patched_fragments in {elapsed:.2f}s")
     
     start = time.time()
-    print(f"[DELETE] Step 4/6: Deleting patched_fragments...")
-    result = await session.execute(
-        text("""
-            DELETE FROM patched_fragment 
-            WHERE edit_target_id IN (
-                SELECT id FROM edit_target 
-                WHERE workspace_file_id IN (
-                    SELECT id FROM workspace_file WHERE base_document_id = :doc_id
-                )
-            )
-        """).bindparams(doc_id=document_id)
-    )
+    print(f"[DELETE] Step 4/6: Deleting edit_targets...")
+    try:
+        result = await session.execute(
+            text("DELETE FROM edit_target WHERE workspace_file_id IN (SELECT id FROM workspace_file WHERE base_document_id = :doc_id)").bindparams(doc_id=document_id)
+        )
+        print(f"[DELETE] Step 4 result: {result.rowcount} rows affected")
+    except Exception as e:
+        print(f"[DELETE] Step 4 ERROR: {str(e)}")
+        raise
     elapsed = time.time() - start
-    print(f"[DELETE] Step 4/6: Deleted patched_fragments in {elapsed:.2f}s")
+    print(f"[DELETE] Step 4/6: Deleted edit_targets in {elapsed:.2f}s")
     
     start = time.time()
     print(f"[DELETE] Step 5/6: Deleting workspace_files...")

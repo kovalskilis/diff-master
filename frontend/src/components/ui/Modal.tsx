@@ -48,32 +48,32 @@ export const Modal = ({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.3 }}
               className={cn(
-                'bg-white rounded-3xl shadow-apple-lg w-full',
+                'bg-white dark:bg-apple-gray-800 rounded-3xl shadow-apple-lg w-full',
                 'max-h-[90vh] overflow-hidden flex flex-col',
                 sizes[size]
               )}
             >
               {/* Header */}
               {(title || description) && (
-                <div className="px-8 pt-8 pb-6 border-b border-apple-gray-100">
+                <div className="px-8 pt-8 pb-6 border-b border-apple-gray-100 dark:border-apple-gray-700">
                   <div className="flex items-start justify-between">
                     <div>
                       {title && (
-                        <h2 className="text-2xl font-semibold text-apple-gray-900">
+                        <h2 className="text-2xl font-semibold text-apple-gray-900 dark:text-apple-gray-50">
                           {title}
                         </h2>
                       )}
                       {description && (
-                        <p className="mt-1 text-sm text-apple-gray-600">
+                        <p className="mt-1 text-sm text-apple-gray-600 dark:text-apple-gray-400">
                           {description}
                         </p>
                       )}
                     </div>
                     <button
                       onClick={onClose}
-                      className="p-2 rounded-full hover:bg-apple-gray-100 transition-colors"
+                      className="p-2 rounded-full hover:bg-apple-gray-100 dark:hover:bg-apple-gray-700 transition-colors"
                     >
-                      <X className="w-5 h-5 text-apple-gray-500" />
+                      <X className="w-5 h-5 text-apple-gray-500 dark:text-apple-gray-400" />
                     </button>
                   </div>
                 </div>

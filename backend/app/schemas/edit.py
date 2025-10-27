@@ -8,24 +8,26 @@ class EditTargetResponse(BaseModel):
     workspace_file_id: int
     status: EditJobStatus
     instruction_text: str
-    article_number: Optional[str] = None  # Добавить поле для номера статьи
-    initial_tax_unit_id: Optional[int] = None
-    confirmed_tax_unit_id: Optional[int] = None
+    article_number: Optional[str] = None
+    article_id: Optional[int] = None
     conflicts_json: Optional[Dict[str, Any]] = None
     
     # Additional fields for UI
-    initial_tax_unit_title: Optional[str] = None
-    initial_tax_unit_breadcrumbs: Optional[str] = None
-    confirmed_tax_unit_title: Optional[str] = None
-    confirmed_tax_unit_breadcrumbs: Optional[str] = None
-    base_document_id: Optional[int] = None  # Для поиска
+    article_title: Optional[str] = None
+    base_document_id: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 
 class EditTargetUpdate(BaseModel):
-    confirmed_tax_unit_id: int
+    article_id: Optional[int] = None
     status: Optional[EditJobStatus] = None
+
+
+class EditTargetCreate(BaseModel):
+    workspace_file_id: int
+    instruction_text: str
+    article_id: int
 
 
 class Phase1Request(BaseModel):
@@ -39,6 +41,7 @@ class Phase1Response(BaseModel):
 
 class Phase2Request(BaseModel):
     workspace_file_id: int
+    force_reapply: bool = False
 
 
 class Phase2Response(BaseModel):

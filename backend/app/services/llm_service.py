@@ -223,7 +223,7 @@ class LLMService:
         """
         try:
             # Limit content size to prevent LLM timeout
-            MAX_CONTENT_LENGTH = 4000  # characters
+            MAX_CONTENT_LENGTH = 16000  # characters (increased from 4000)
             if len(edits_content) > MAX_CONTENT_LENGTH:
                 print(f"[LLM] Content too large ({len(edits_content)} chars), truncating to {MAX_CONTENT_LENGTH}")
                 edits_content = edits_content[:MAX_CONTENT_LENGTH] + "\n\n[ТЕКСТ ОБРЕЗАН ДЛЯ ОБРАБОТКИ LLM]"

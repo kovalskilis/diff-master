@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from .celery_app import celery_app
 from config import settings
 from models.document import (
-    WorkspaceFile, EditTarget, EditJobStatus, TaxUnit, 
+    WorkspaceFile, EditTarget, EditJobStatus, Article, 
     PatchedFragment, ChangeType, BaseDocument
 )
 from services.llm_service import LLMService
@@ -482,9 +482,14 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
             print(f"[Phase1] ERROR: Base document not found")
             return {"error": "Base document not found"}
         
-        # Get document structure for article targeting
-        document_structure = base_document.structure or {}
-        print(f"[Phase1] Document has {len(document_structure)} articles")
+        # Get articles from document
+        articles = session.query(Article).filter(
+            Article.base_document_id == workspace_file.base_document_id
+        ).all()
+        
+        # Create article map for quick lookup
+        article_map = {article.article_number: article for article in articles}
+        print(f"[Phase1] Document has {len(articles)} articles")
         
         # Parse edits using LLM
         print(f"[Phase1] Parsing edits using LLM...")
@@ -507,12 +512,6 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
         
         print(f"[Phase1] Parsed {len(parsed_edits)} articles: {list(parsed_edits.keys())}")
         
-        # Get tax units for matching
-        tax_units = session.query(TaxUnit).filter(
-            TaxUnit.base_document_id == workspace_file.base_document_id
-        ).all()
-        print(f"[Phase1] Found {len(tax_units)} tax units")
-        
         # Check if we have any articles to process
         if not parsed_edits:
             print(f"[Phase1] WARNING: No articles found in file")
@@ -528,43 +527,40 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
             print(f"[Phase1] Processing article {article_num}")
             
             # Проверить, не создана ли уже задача для этой статьи
-            # Более безопасная проверка через to_tsquery для JSONB
-            import json
-            article_filter = json.dumps({"article": article_num})
-            
-            existing_target = session.query(EditTarget).filter(
+            # Проверяем по instruction_text с блокировкой строки для предотвращения дубликатов
+            existing_target = session.query(EditTarget).with_for_update().filter(
                 EditTarget.workspace_file_id == workspace_file_id,
-                EditTarget.user_id == user_uuid
-            ).filter(
-                EditTarget.conflicts_json['article'].astext == article_num
+                EditTarget.user_id == user_uuid,
+                EditTarget.instruction_text == article_content
             ).first()
             
             if existing_target:
-                print(f"[Phase1] Target for article {article_num} already exists, skipping")
+                print(f"[Phase1] Target for article {article_num} already exists (instruction_text match), skipping")
                 continue
             
-            # Find tax units for this article
-            article_tax_units = [
-                unit for unit in tax_units 
-                if article_num in (unit.breadcrumbs_path or '')
-            ]
+            # Find article by number
+            article = article_map.get(article_num)
+            article_id = article.id if article else None
             
-            print(f"[Phase1] Article {article_num}: {len(article_tax_units)} tax units found")
+            print(f"[Phase1] Article {article_num}: {'found' if article else 'NOT FOUND'}")
+            
+            # If article is found, status should be pending (ready to apply)
+            # If article is NOT found, status should be review (needs manual confirmation)
+            target_status = EditJobStatus.pending if article_id else EditJobStatus.review
             
             # Create edit target for this article
             edit_target = EditTarget(
                 user_id=user_uuid,
                 workspace_file_id=workspace_file_id,
-                status=EditJobStatus.review,
+                status=target_status,
                 instruction_text=article_content,
-                initial_tax_unit_id=None,
-                confirmed_tax_unit_id=None,
+                article_id=article_id,
                 conflicts_json={
                     "article": article_num,
                     "source": "llm_structured_parsing",
                     "content_length": len(article_content),
-                    "tax_units_found": len(article_tax_units),
-                    "structured_format": True
+                    "structured_format": True,
+                    "auto_confirmed": article_id is not None
                 }
             )
             session.add(edit_target)
@@ -612,10 +608,12 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
     
     try:
         # Get all edit targets for this workspace file
+        # Include both pending (auto-confirmed) and review (manually confirmed) targets
         edit_targets = session.query(EditTarget).filter(
             EditTarget.workspace_file_id == workspace_file_id,
             EditTarget.user_id == user_uuid,
-            EditTarget.confirmed_tax_unit_id.isnot(None)
+            EditTarget.article_id.isnot(None),
+            EditTarget.status.in_([EditJobStatus.pending, EditJobStatus.review])
         ).all()
         
         if not edit_targets:
@@ -636,51 +634,30 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
         asyncio.set_event_loop(loop)
         
         applied_count = 0
+        total_targets = len(edit_targets)
         
-        # Get base document and its structure for article-specific editing
-        base_document = session.query(BaseDocument).filter(
-            BaseDocument.id == workspace_file.base_document_id
-        ).first()
-        
-        document_structure = base_document.structure if base_document else {}
-        
-        for target in edit_targets:
-            # Get tax_unit and its current version
-            tax_unit = session.query(TaxUnit).filter(
-                TaxUnit.id == target.confirmed_tax_unit_id
+        for target_idx, target in enumerate(edit_targets):
+            # Check if fragment already exists for this target
+            existing_fragment = session.query(PatchedFragment).filter(
+                PatchedFragment.edit_target_id == target.id
             ).first()
             
-            if not tax_unit:
+            if existing_fragment:
+                print(f"[Phase2] Fragment for target {target.id} already exists, skipping")
                 continue
             
-            # Try to get article-specific content for more precise editing
-            before_text = ""
-            target_article = None
+            # Get article
+            article = session.query(Article).filter(
+                Article.id == target.article_id
+            ).first()
             
-            # Extract article number from breadcrumbs if possible
-            if tax_unit.breadcrumbs_path:
-                import re
-                article_match = re.search(r'Статья\s+(\d+(?:\.\d+)?)', tax_unit.breadcrumbs_path)
-                if article_match:
-                    target_article = article_match.group(1)
+            if not article:
+                continue
             
-            # Use article content if available, otherwise fall back to tax unit content
-            if target_article and target_article in document_structure:
-                before_text = document_structure[target_article]['content']
-                print(f"[Phase2] Using article {target_article} content ({len(before_text)} chars)")
-            else:
-                # Fallback to tax unit content
-                from models.document import TaxUnitVersion
-                current_version = None
-                if tax_unit.current_version_id:
-                    current_version = session.query(TaxUnitVersion).filter(
-                        TaxUnitVersion.id == tax_unit.current_version_id
-                    ).first()
-                
-                before_text = current_version.text_content if current_version else (tax_unit.title or "")
-                print(f"[Phase2] Using tax unit content ({len(before_text)} chars)")
+            before_text = article.content
+            print(f"[Phase2] Processing {target_idx + 1}/{total_targets}: Article {article.article_number} ({len(before_text)} chars)")
             
-            # Apply edit using LLM with article-specific content
+            # Apply edit using LLM
             after_text = loop.run_until_complete(
                 llm_service.apply_edit_instruction(
                     before_text=before_text,
@@ -697,7 +674,7 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
             patched_fragment = PatchedFragment(
                 user_id=user_uuid,
                 edit_target_id=target.id,
-                tax_unit_id=tax_unit.id,
+                article_id=article.id,
                 before_text=before_text,
                 after_text=after_text,
                 change_type=change_type,
@@ -710,10 +687,12 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
             
             # Update target status
             target.status = EditJobStatus.completed
-            
             applied_count += 1
+            
+            # Commit after each fragment to enable dynamic loading
+            session.commit()
+            print(f"[Phase2] Committed fragment for target {target.id} ({applied_count}/{total_targets})")
         
-        session.commit()
         loop.close()
         
         return {

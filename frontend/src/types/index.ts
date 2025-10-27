@@ -40,15 +40,12 @@ export interface EditTarget {
   workspace_file_id: number;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'review';
   instruction_text: string;
-  article_number?: string;  // Добавить поле для номера статьи
-  initial_tax_unit_id: number | null;
-  confirmed_tax_unit_id: number | null;
+  article_number?: string;
+  article_id: number | null;
   conflicts_json: Record<string, any> | null;
-  initial_tax_unit_title?: string;
-  initial_tax_unit_breadcrumbs?: string;
-  confirmed_tax_unit_title?: string;
-  confirmed_tax_unit_breadcrumbs?: string;
-  base_document_id?: number | null;  // Для поиска
+  article_title?: string;
+  base_document_id?: number | null;
+  confirmed_tax_unit_breadcrumbs?: string | null;
 }
 
 export interface DiffItem {

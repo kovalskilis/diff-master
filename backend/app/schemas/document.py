@@ -30,6 +30,15 @@ class TaxUnitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ArticleResponse(BaseModel):
+    id: int
+    article_number: str
+    title: Optional[str] = None
+    content: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TaxUnitHierarchyResponse(BaseModel):
     id: int
     type: TaxUnitType
@@ -66,9 +75,9 @@ class WorkspaceFileResponse(BaseModel):
 
 
 class SearchResult(BaseModel):
-    tax_unit_id: int
+    article_id: int
     title: Optional[str] = None
-    breadcrumbs_path: Optional[str] = None
+    article_number: Optional[str] = None
     text_snippet: str
     rank: float
     
@@ -76,9 +85,9 @@ class SearchResult(BaseModel):
 
 
 class DiffResponse(BaseModel):
-    tax_unit_id: int
+    article_id: Optional[int] = None
     title: Optional[str] = None
-    breadcrumbs_path: Optional[str] = None
+    article_number: Optional[str] = None
     before_text: str
     after_text: str
     change_type: ChangeType

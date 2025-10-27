@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Trash2, Loader2, CheckCircle } from 'lucide-react';
 
@@ -8,29 +8,10 @@ interface DeletingWidgetProps {
 }
 
 export const DeletingWidget: React.FC<DeletingWidgetProps> = ({ documentName, onComplete }) => {
-  const [progress, setProgress] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  useEffect(() => {
-    // Более реалистичный прогресс-бар
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) {
-          // Останавливаемся на 90% и ждем реального завершения
-          return prev;
-        }
-        // Медленное увеличение с замедлением
-        const increment = Math.max(0.5, Math.random() * 2);
-        return Math.min(prev + increment, 90);
-      });
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Функция для завершения прогресса
+  // Функция для завершения
   const completeProgress = () => {
-    setProgress(100);
     setIsCompleted(true);
     setTimeout(() => {
       onComplete?.();
@@ -73,31 +54,13 @@ export const DeletingWidget: React.FC<DeletingWidgetProps> = ({ documentName, on
           <h3 className={`text-sm font-medium ${
             isCompleted ? 'text-green-900' : 'text-red-900'
           }`}>
-            {isCompleted ? 'Документ удален' : 'Удаление документа'}
+            {isCompleted ? 'Документ удален' : 'Удаление документа...'}
           </h3>
           <p className={`text-sm truncate ${
             isCompleted ? 'text-green-700' : 'text-red-700'
           }`}>
             {documentName}
           </p>
-          <div className="mt-2">
-            <div className={`w-full rounded-full h-1.5 ${
-              isCompleted ? 'bg-green-200' : 'bg-red-200'
-            }`}>
-              <motion.div
-                className={`h-1.5 rounded-full ${
-                  isCompleted ? 'bg-green-500' : 'bg-red-500'
-                }`}
-                style={{ width: `${progress}%` }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-              />
-            </div>
-            <div className={`mt-1 text-xs text-center ${
-              isCompleted ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {isCompleted ? 'Готово!' : `${Math.round(progress)}%`}
-            </div>
-          </div>
         </div>
         <div className="flex-shrink-0">
           {isCompleted ? (

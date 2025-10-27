@@ -42,8 +42,8 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
 
   if (!articles.length) {
     return (
-      <div className={cn("text-center py-8 text-apple-gray-500", className)}>
-        <BookOpen className="w-12 h-12 mx-auto mb-4 text-apple-gray-300" />
+      <div className={cn("text-center py-8 text-apple-gray-500 dark:text-apple-gray-400", className)}>
+        <BookOpen className="w-12 h-12 mx-auto mb-4 text-apple-gray-300 dark:text-apple-gray-600" />
         <p>Структура документа не найдена</p>
       </div>
     );
@@ -53,7 +53,7 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center gap-2 mb-4">
         <FileText className="w-5 h-5 text-apple-blue" />
-        <h3 className="text-lg font-semibold text-apple-gray-900">
+        <h3 className="text-lg font-semibold text-apple-gray-900 dark:text-apple-gray-50">
           Структура документа ({articles.length} статей)
         </h3>
       </div>
@@ -66,13 +66,13 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
               key={articleNumber}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="border border-apple-gray-200 rounded-lg overflow-hidden"
+              className="border border-apple-gray-200 dark:border-apple-gray-700 rounded-lg overflow-hidden"
             >
               <button
                 onClick={() => toggleArticle(articleNumber)}
                 className={cn(
-                  "w-full px-4 py-3 text-left flex items-center justify-between hover:bg-apple-gray-50 transition-colors",
-                  selectedArticle === articleNumber && "bg-apple-blue/5 border-apple-blue"
+                  "w-full px-4 py-3 text-left flex items-center justify-between hover:bg-apple-gray-50 dark:hover:bg-apple-gray-800 transition-colors",
+                  selectedArticle === articleNumber && "bg-apple-blue/5 dark:bg-apple-blue/10 border-apple-blue"
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -81,7 +81,7 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
                   ) : (
                     <ChevronRight className="w-4 h-4 text-apple-gray-400" />
                   )}
-                  <span className="font-medium text-apple-gray-900">
+                  <span className="font-medium text-apple-gray-900 dark:text-apple-gray-50">
                     Статья {articleNumber}
                   </span>
                 </div>
@@ -103,13 +103,13 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="border-t border-apple-gray-200"
+                    className="border-t border-apple-gray-200 dark:border-apple-gray-700"
                   >
-                    <div className="p-4 bg-apple-gray-50">
-                      <h4 className="font-medium text-apple-gray-900 mb-2">
+                    <div className="p-4 bg-apple-gray-50 dark:bg-apple-gray-800">
+                      <h4 className="font-medium text-apple-gray-900 dark:text-apple-gray-50 mb-2">
                         {article.title}
                       </h4>
-                      <p className="text-sm text-apple-gray-600 line-clamp-3">
+                      <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400 line-clamp-3">
                         {article.content.substring(0, 200)}
                         {article.content.length > 200 && '...'}
                       </p>
@@ -126,10 +126,10 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="border border-apple-gray-200 rounded-lg p-6 bg-white"
+            className="border border-apple-gray-200 dark:border-apple-gray-700 rounded-lg p-6 bg-white dark:bg-apple-gray-800"
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-apple-gray-900">
+              <h3 className="text-lg font-semibold text-apple-gray-900 dark:text-apple-gray-50">
                 Статья {selectedArticle}
               </h3>
               <button
@@ -141,10 +141,10 @@ export const DocumentStructure = ({ structure, className }: DocumentStructurePro
             </div>
             <div className="space-y-4">
               <div>
-                <h4 className="font-medium text-apple-gray-900 mb-2">
+                <h4 className="font-medium text-apple-gray-900 dark:text-apple-gray-50 mb-2">
                   {structure[selectedArticle].title}
                 </h4>
-                <div className="prose prose-sm max-w-none text-apple-gray-700 whitespace-pre-wrap">
+                <div className="prose prose-sm max-w-none text-apple-gray-700 dark:text-apple-gray-300 whitespace-pre-wrap">
                   {structure[selectedArticle].content}
                 </div>
               </div>

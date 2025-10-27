@@ -95,18 +95,18 @@ async def get_diff(
             detail="Either workspace_file_id or snapshot_id must be provided"
         )
     
-    # Get all tax_unit data in one query
-    from models.document import TaxUnit
+    # Get all article data in one query
+    from models.document import Article
     
-    tax_unit_ids = [f.tax_unit_id for f in fragments if f.tax_unit_id]
-    tax_units = {}
+    article_ids = [f.article_id for f in fragments if f.article_id]
+    articles = {}
     
-    if tax_unit_ids:
+    if article_ids:
         result = await session.execute(
-            select(TaxUnit).where(TaxUnit.id.in_(tax_unit_ids))
+            select(Article).where(Article.id.in_(article_ids))
         )
-        tax_units_query = result.scalars().fetchall()
-        tax_units = {tu.id: tu for tu in tax_units_query}
+        articles_query = result.scalars().fetchall()
+        articles = {a.id: a for a in articles_query}
     
     # Generate diff for each fragment
     diff_list = []
@@ -125,12 +125,12 @@ async def get_diff(
             numlines=3
         )
         
-        tax_unit = tax_units.get(fragment.tax_unit_id) if fragment.tax_unit_id else None
+        article = articles.get(fragment.article_id) if fragment.article_id else None
         
         diff_response = DiffResponse(
-            tax_unit_id=fragment.tax_unit_id,
-            title=tax_unit.title if tax_unit else None,
-            breadcrumbs_path=tax_unit.breadcrumbs_path if tax_unit else None,
+            article_id=fragment.article_id,
+            title=article.title if article else None,
+            article_number=article.article_number if article else None,
             before_text=fragment.before_text or "",
             after_text=fragment.after_text or "",
             change_type=fragment.change_type,

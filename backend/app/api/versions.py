@@ -6,7 +6,7 @@ from typing import List
 from database import get_async_session
 from auth import current_active_user
 from models.user import User
-from models.document import Snapshot, BaseDocument, PatchedFragment, TaxUnit, TaxUnitVersion, AuditAction
+from models.document import Snapshot, BaseDocument, PatchedFragment, Article, ArticleVersion, AuditAction, EditTarget
 from schemas.document import SnapshotResponse
 from services.audit_service import AuditService
 
@@ -63,9 +63,25 @@ async def commit_version(
     Creates new snapshot with all patched fragments
     """
     # Get all patched fragments for this workspace file
+    # First get edit targets for this workspace file
+    edit_targets_result = await session.execute(
+        select(EditTarget).where(
+            EditTarget.workspace_file_id == workspace_file_id,
+            EditTarget.user_id == user.id
+        )
+    )
+    edit_targets = edit_targets_result.scalars().all()
+    
+    if not edit_targets:
+        raise HTTPException(status_code=400, detail="No edit targets found for this workspace file")
+    
+    # Get fragment IDs for these targets
+    edit_target_ids = [et.id for et in edit_targets]
+    
+    # Get all patched fragments for these targets
     result = await session.execute(
         select(PatchedFragment).where(
-            PatchedFragment.user_id == user.id
+            PatchedFragment.edit_target_id.in_(edit_target_ids)
         )
     )
     fragments = result.scalars().all()
@@ -75,8 +91,19 @@ async def commit_version(
     
     # Get document ID from first fragment
     first_fragment = fragments[0]
-    tax_unit = first_fragment.tax_unit
-    document_id = tax_unit.base_document_id
+    if not first_fragment.article_id:
+        raise HTTPException(status_code=400, detail="Fragment has no article_id")
+    
+    # Explicitly load article to avoid MissingGreenlet
+    article_result = await session.execute(
+        select(Article).where(Article.id == first_fragment.article_id)
+    )
+    article = article_result.scalar_one_or_none()
+    
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    document_id = article.base_document_id
     
     # Create new snapshot
     snapshot = Snapshot(
@@ -87,21 +114,28 @@ async def commit_version(
     session.add(snapshot)
     await session.flush()
     
-    # Create new versions for affected tax units
+    # Create new versions for affected articles
     for fragment in fragments:
         # Create new version
-        version = TaxUnitVersion(
-            tax_unit_id=fragment.tax_unit_id,
+        version = ArticleVersion(
+            article_id=fragment.article_id,
             snapshot_id=snapshot.id,
-            text_content=fragment.after_text,
-            created_by_user_id=user.id
+            content=fragment.after_text
         )
         session.add(version)
-        await session.flush()
-        
-        # Update tax_unit's current_version_id
-        tax_unit = fragment.tax_unit
-        tax_unit.current_version_id = version.id
+    
+    await session.flush()
+    
+    # Update articles content
+    for fragment in fragments:
+        if fragment.article_id:
+            # Explicitly load article to update
+            article_result = await session.execute(
+                select(Article).where(Article.id == fragment.article_id)
+            )
+            article = article_result.scalar_one_or_none()
+            if article:
+                article.content = fragment.after_text
     
     # Audit log
     await AuditService.log_action(
