@@ -53,9 +53,19 @@ def upgrade() -> None:
         """
     )
 
+    # 4) Create partial unique index when article_id is known (more strict)
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_edit_target_article
+        ON edit_target (user_id, workspace_file_id, article_id)
+        WHERE article_id IS NOT NULL;
+        """
+    )
+
 
 def downgrade() -> None:
     # Drop the functional unique index if it exists
     op.execute("DROP INDEX IF EXISTS uq_edit_target_norm;")
+    op.execute("DROP INDEX IF EXISTS uq_edit_target_article;")
 
 

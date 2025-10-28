@@ -527,20 +527,33 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
             print(f"[Phase1] Processing article {article_num}")
             
             # Проверить, не создана ли уже задача для этой статьи
-            # Проверяем по instruction_text с блокировкой строки для предотвращения дубликатов
-            existing_target = session.query(EditTarget).with_for_update().filter(
-                EditTarget.workspace_file_id == workspace_file_id,
-                EditTarget.user_id == user_uuid,
-                EditTarget.instruction_text == article_content
-            ).first()
+            # 1) Если нашли article_id – считаем уникальным по (user, workspace_file, article_id)
+            # 2) Если article_id нет – по текстовому номеру статьи в conflicts_json['article']
+            existing_target = None
+            # Найдём article_id заранее для корректной проверки
+            article = article_map.get(article_num)
+            article_id = article.id if article else None
+
+            if article_id is not None:
+                existing_target = session.query(EditTarget).with_for_update().filter(
+                    EditTarget.workspace_file_id == workspace_file_id,
+                    EditTarget.user_id == user_uuid,
+                    EditTarget.article_id == article_id
+                ).first()
+            else:
+                from sqlalchemy import text
+                existing_target = session.query(EditTarget).with_for_update().filter(
+                    EditTarget.workspace_file_id == workspace_file_id,
+                    EditTarget.user_id == user_uuid
+                ).filter(
+                    EditTarget.conflicts_json['article'].astext == article_num
+                ).first()
             
             if existing_target:
                 print(f"[Phase1] Target for article {article_num} already exists (instruction_text match), skipping")
                 continue
             
-            # Find article by number
-            article = article_map.get(article_num)
-            article_id = article.id if article else None
+            # Find article by number (already resolved above)
             
             print(f"[Phase1] Article {article_num}: {'found' if article else 'NOT FOUND'}")
             
