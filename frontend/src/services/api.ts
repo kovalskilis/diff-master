@@ -11,8 +11,11 @@ import type {
   SearchResult,
 } from '@/types';
 
+// Single source of truth for API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -77,7 +80,7 @@ export const authAPI = {
         formDataFetch.append('username', email);
         formDataFetch.append('password', password);
         
-        const fetchResponse = await fetch('http://localhost:8000/auth/jwt/login', {
+        const fetchResponse = await fetch(`${API_BASE_URL}/auth/jwt/login`, {
           method: 'POST',
           body: formDataFetch,
           credentials: 'include',

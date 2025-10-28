@@ -1,0 +1,83 @@
+databases:
+  - name: legal-diff-db
+
+services:
+  # Redis (free plan)
+  - type: redis
+    name: legal-diff-redis
+    plan: free
+
+  # Backend API (FastAPI)
+  - type: web
+    name: legal-diff-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: legal-diff-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: legal-diff-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: legal-diff-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BACKEND_CORS_ORIGINS
+        value: https://legal-diff-frontend.onrender.com
+
+  # Celery Worker
+  - type: worker
+    name: legal-diff-worker
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: legal-diff-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: legal-diff-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: legal-diff-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: legal-diff-api
+          property: SECRET_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: legal-diff-api
+          property: OPENAI_API_KEY
+
+  # Frontend (Vite static site)
+  - type: static
+    name: legal-diff-frontend
+    rootDir: ./frontend
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: legal-diff-api
+          type: web
+          property: url
+
