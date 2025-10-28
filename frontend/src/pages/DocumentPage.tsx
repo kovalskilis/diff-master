@@ -73,10 +73,10 @@ export const DocumentPage = () => {
         console.log('Targets already exist, loading existing results');
         navigate(`/review/${workspaceFileId}`);
       } else {
-        // Целей нет, запускаем Phase1
+        // Целей нет, запускаем Phase1 и передаём task_id, чтобы ReviewPage не стартовал повторно
         console.log('No targets found, starting Phase 1');
-        await editsAPI.startPhase1(workspaceFileId);
-        navigate(`/review/${workspaceFileId}`);
+        const res = await editsAPI.startPhase1(workspaceFileId);
+        navigate(`/review/${workspaceFileId}?task=${encodeURIComponent(res.task_id)}`);
       }
     } catch (error) {
       console.error('Failed to start Phase 1:', error);

@@ -18,13 +18,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Remove existing duplicates leaving the lowest id
+    # Normalize instruction_text by collapsing whitespace before deduplication
+    # 1) Remove duplicates based on normalized text (keep lowest id)
     op.execute(
         """
         WITH d AS (
             SELECT id,
                    ROW_NUMBER() OVER (
-                       PARTITION BY user_id, workspace_file_id, instruction_text
+                       PARTITION BY user_id,
+                                    workspace_file_id,
+                                    md5(regexp_replace(instruction_text, '\\s+', ' ', 'g'))
                        ORDER BY id
                    ) rn
             FROM edit_target
@@ -35,17 +38,24 @@ def upgrade() -> None:
         """
     )
 
-    # Create unique index to prevent future duplicates (idempotent)
+    # 2) Drop legacy exact-text unique index if был создан вручную
+    op.execute("DROP INDEX IF EXISTS uq_edit_target_unique;")
+
+    # 3) Create functional unique index on normalized text (idempotent)
     op.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_edit_target_unique
-        ON edit_target (user_id, workspace_file_id, instruction_text);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_edit_target_norm
+        ON edit_target (
+            user_id,
+            workspace_file_id,
+            md5(regexp_replace(instruction_text, '\\s+', ' ', 'g'))
+        );
         """
     )
 
 
 def downgrade() -> None:
-    # Drop the unique index if it exists
-    op.execute("DROP INDEX IF EXISTS uq_edit_target_unique;")
+    # Drop the functional unique index if it exists
+    op.execute("DROP INDEX IF EXISTS uq_edit_target_norm;")
 
 

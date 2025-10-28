@@ -32,7 +32,14 @@ export const ReviewPage = () => {
   const [newArticleId, setNewArticleId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (workspaceFileId) {
+    if (!workspaceFileId) return;
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('task');
+    if (taskId) {
+      // Запущено из DocumentPage – просто ждём завершения
+      pollTaskStatus(taskId);
+    } else {
+      // Стартуем здесь, только если не пришёл taskId
       checkAndStartPhase1();
     }
   }, [workspaceFileId]);
