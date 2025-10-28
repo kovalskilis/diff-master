@@ -228,6 +228,19 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS changetype;")
     op.execute("DROP TYPE IF EXISTS taxunittype;")
     
-    # ### Delete test user ###
-    op.execute("DELETE FROM \"user\" WHERE email = 'test@test.com';")
+    # ### Delete test user (only if table still exists) ###
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'user'
+            ) THEN
+                DELETE FROM "user" WHERE email = 'test@test.com';
+            END IF;
+        END
+        $$;
+        """
+    )
     # ### end Alembic commands ###

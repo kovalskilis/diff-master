@@ -26,7 +26,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Revert tax_unit_id to NOT NULL (but this might fail if there are NULL values)
-    op.alter_column('patched_fragment', 'tax_unit_id',
-                   existing_type=sa.Integer(),
-                   nullable=False)
+    # Before making column NOT NULL again, remove rows that would violate the constraint
+    # (these rows were created while the column was nullable).
+    op.execute("DELETE FROM patched_fragment WHERE tax_unit_id IS NULL")
+
+    # Revert tax_unit_id to NOT NULL
+    op.alter_column(
+        'patched_fragment',
+        'tax_unit_id',
+        existing_type=sa.Integer(),
+        nullable=False
+    )
