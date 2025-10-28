@@ -60,13 +60,9 @@ services:
           type: redis
           property: connectionString
       - key: SECRET_KEY
-        fromService:
-          name: legal-diff-api
-          property: SECRET_KEY
+        sync: false
       - key: OPENAI_API_KEY
-        fromService:
-          name: legal-diff-api
-          property: OPENAI_API_KEY
+        sync: false
 
   # Frontend (Vite static site)
   - type: web
