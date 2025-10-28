@@ -63,6 +63,17 @@ export const DocumentPage = () => {
     }
   };
 
+  const handleDeleteWorkspaceFile = async (fileId: number) => {
+    if (!confirm('Удалить файл правок и все связанные цели? Это действие необратимо.')) return;
+    try {
+      await workspaceAPI.delete(fileId);
+      setWorkspaceFiles(prev => prev.filter(f => f.id !== fileId));
+    } catch (error) {
+      console.error('Failed to delete workspace file:', error);
+      alert('Ошибка удаления файла правок');
+    }
+  };
+
   const handleStartPhase1 = async (workspaceFileId: number) => {
     try {
       // Сначала проверяем, есть ли уже созданные цели
@@ -188,13 +199,21 @@ export const DocumentPage = () => {
                             </p>
                           </div>
                         </div>
-                        <Button
-                          variant="primary"
-                          icon={<Play />}
-                          onClick={() => handleStartPhase1(file.id)}
-                        >
-                          Найти цели
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="primary"
+                            icon={<Play />}
+                            onClick={() => handleStartPhase1(file.id)}
+                          >
+                            Найти цели
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => handleDeleteWorkspaceFile(file.id)}
+                          >
+                            Удалить
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   ))}

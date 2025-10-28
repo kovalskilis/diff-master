@@ -41,12 +41,16 @@ export const Modal = ({
           />
           
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.3 }}
+              onClick={(e) => e.stopPropagation()}
               className={cn(
                 'bg-white dark:bg-apple-gray-800 rounded-3xl shadow-apple-lg w-full',
                 'max-h-[90vh] overflow-hidden flex flex-col',
