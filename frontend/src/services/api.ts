@@ -61,13 +61,13 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: async (email: string, password: string) => {
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', password);
+    const body = new URLSearchParams();
+    body.set('username', email);
+    body.set('password', password);
     
     try {
-      const response = await api.post('/auth/jwt/login', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await api.post('/auth/jwt/login', body, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       });
       return response.data;
     } catch (error: any) {
@@ -75,16 +75,19 @@ export const authAPI = {
       if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
         console.log('CORS error detected, trying alternative method');
         
-        // Use fetch directly with credentials
-        const formDataFetch = new FormData();
-        formDataFetch.append('username', email);
-        formDataFetch.append('password', password);
+        // Use fetch directly with credentials (same x-www-form-urlencoded format)
+        const fetchBody = new URLSearchParams();
+        fetchBody.set('username', email);
+        fetchBody.set('password', password);
         
         const fetchResponse = await fetch(`${API_BASE_URL}/auth/jwt/login`, {
           method: 'POST',
-          body: formDataFetch,
+          body: fetchBody,
           credentials: 'include',
           mode: 'cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
         });
         
         if (fetchResponse.ok) {

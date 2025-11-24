@@ -43,14 +43,18 @@ export const DiffPage = () => {
       // Get total number of targets to track progress
       const targets = await editsAPI.getTargets(Number(workspaceFileId));
       setTotalTargets(targets.length);
-      
-      // Load initial diffs
-      await loadDiffs();
-      
-      // If we have targets but no diffs yet, start polling
-      if (targets.length > 0 && initialLoadRef.current) {
+
+      // Load initial diffs and decide whether to poll
+      const initial = await diffAPI.getByWorkspaceFile(Number(workspaceFileId));
+      setDiffs(initial);
+      setIsLoading(false);
+
+      const needPolling = targets.length > (initial?.length || 0);
+      if (needPolling && initialLoadRef.current) {
         initialLoadRef.current = false;
         startPolling();
+      } else {
+        stopPolling();
       }
     } catch (error) {
       console.error('Failed to initialize page:', error);

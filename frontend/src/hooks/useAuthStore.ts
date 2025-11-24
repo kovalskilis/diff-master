@@ -30,7 +30,10 @@ export const useAuthStore = create<AuthState>()(
     set({ isLoading: true, error: null });
     try {
       const data = await authAPI.login(email, password);
-      const token = data.access_token;
+      const token = data?.access_token || data?.token || data?.accessToken;
+      if (!token) {
+        throw new Error('Не удалось получить токен авторизации');
+      }
       localStorage.setItem('token', token);
       
       const user = await authAPI.getMe();
