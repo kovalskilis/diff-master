@@ -204,13 +204,11 @@ async def get_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # Build structure from articles for compatibility with frontend
     articles_result = await session.execute(
         select(Article).where(Article.base_document_id == document_id)
     )
     articles = articles_result.scalars().all()
     
-    # If no articles exist, this is an old document - return empty structure
     structure = {}
     if articles:
         for article in articles:
@@ -219,7 +217,6 @@ async def get_document(
                 "content": article.content
             }
     
-    # Add structure to response (for backward compatibility)
     document_dict = {
         "id": document.id,
         "name": document.name,

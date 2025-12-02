@@ -35,7 +35,7 @@ class LLMService:
                 temperature=0,
                 openai_api_key=settings.DEEPSEEK_API_KEY,
                 openai_api_base=settings.DEEPSEEK_BASE_URL,
-                request_timeout=60,  # 60 second timeout
+                request_timeout=180,  # increased timeout to handle long edits
                 max_retries=1  # Only 1 retry
             )
             print(f"[LLM] Initialized DeepSeek with model={settings.LLM_MODEL}")
@@ -44,7 +44,7 @@ class LLMService:
                 model=settings.LLM_MODEL,
                 temperature=0,
                 openai_api_key=settings.OPENAI_API_KEY,
-                request_timeout=60,  # 60 second timeout
+                request_timeout=180,  # increased timeout to handle long edits
                 max_retries=1  # Only 1 retry
             )
             print(f"[LLM] Initialized OpenAI with model={settings.LLM_MODEL}")
@@ -305,12 +305,6 @@ class LLMService:
         Parse edits and group them by articles using LLM (synchronous version)
         """
         try:
-            # Limit content size to prevent LLM timeout
-            MAX_CONTENT_LENGTH = 16000  # characters (increased from 4000)
-            if len(edits_content) > MAX_CONTENT_LENGTH:
-                print(f"[LLM] Content too large ({len(edits_content)} chars), truncating to {MAX_CONTENT_LENGTH}")
-                edits_content = edits_content[:MAX_CONTENT_LENGTH] + "\n\n[ТЕКСТ ОБРЕЗАН ДЛЯ ОБРАБОТКИ LLM]"
-            
             print(f"[LLM] Processing content of {len(edits_content)} characters")
             prompt = ChatPromptTemplate.from_messages([
                 ("system", """Проанализируй текст правок и создай JSON с номерами статей как ключами. 
