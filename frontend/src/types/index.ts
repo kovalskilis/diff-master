@@ -80,3 +80,12 @@ export interface SearchResult {
   rank: number;
 }
 
+// Search results for articles endpoint (/api/search/articles)
+export interface ArticleSearchResult {
+  article_id: number;
+  title: string | null;
+  article_number: string | null;
+  text_snippet: string;
+  rank: number;
+}
+

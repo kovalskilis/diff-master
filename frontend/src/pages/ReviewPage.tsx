@@ -11,7 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { editsAPI, searchAPI } from '@/services/api';
-import type { EditTarget, SearchResult } from '@/types';
+import type { EditTarget, ArticleSearchResult } from '@/types';
 
 export const ReviewPage = () => {
   const { workspaceFileId } = useParams<{ workspaceFileId: string }>();
@@ -23,7 +23,7 @@ export const ReviewPage = () => {
   // Edit modal state
   const [editingTarget, setEditingTarget] = useState<EditTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<ArticleSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
   // Add new target modal state
@@ -113,6 +113,32 @@ export const ReviewPage = () => {
     setSearchResults([]);
   };
 
+  // Debounced autocomplete on input
+  useEffect(() => {
+    if (!editingTarget) return;
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      return;
+    }
+
+    // Determine current document id
+    const documentId = editingTarget.base_document_id || targets[0]?.base_document_id;
+    if (!documentId) return;
+
+    const handle = setTimeout(async () => {
+      try {
+        const results = await searchAPI.searchArticles(query, documentId);
+        setSearchResults(results);
+      } catch (error) {
+        // swallow autocomplete errors
+        console.error('Autocomplete error:', error);
+      }
+    }, 250);
+
+    return () => clearTimeout(handle);
+  }, [searchQuery, editingTarget, targets]);
+
   const handleSearch = async () => {
     if (!searchQuery.trim() || !editingTarget) return;
     
@@ -126,10 +152,8 @@ export const ReviewPage = () => {
     
     setIsSearching(true);
     try {
-      console.log('Searching with document ID:', documentId, 'query:', searchQuery);
-      const results = await searchAPI.searchTaxUnits(searchQuery, documentId);
+      const results = await searchAPI.searchArticles(searchQuery, documentId);
       setSearchResults(results);
-      console.log('Search results:', results);
       
       if (results.length === 0) {
         alert('Ничего не найдено. Попробуйте другой запрос.');
@@ -143,11 +167,11 @@ export const ReviewPage = () => {
     }
   };
 
-  const handleSelectTaxUnit = async (taxUnitId: number) => {
+  const handleSelectArticle = async (articleId: number) => {
     if (!editingTarget) return;
     
     try {
-      const updated = await editsAPI.updateTarget(editingTarget.id, taxUnitId);
+      const updated = await editsAPI.updateTarget(editingTarget.id, articleId);
       setTargets(targets.map(t => t.id === updated.id ? updated : t));
       setEditingTarget(null);
     } catch (error) {
@@ -407,15 +431,15 @@ export const ReviewPage = () => {
             <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-apple">
               {searchResults.map((result) => (
                 <motion.button
-                  key={result.tax_unit_id}
+                  key={result.article_id}
                   whileHover={{ x: 4 }}
-                  onClick={() => handleSelectTaxUnit(result.tax_unit_id)}
+                  onClick={() => handleSelectArticle(result.article_id)}
                   className="w-full text-left p-4 bg-white border border-apple-gray-200 rounded-xl hover:border-apple-blue hover:bg-apple-blue/5 transition-all"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium text-apple-gray-900">
-                        {result.breadcrumbs_path}
+                        Статья {result.article_number || '—'}
                       </p>
                       <p className="text-sm text-apple-gray-600 mt-1">
                         {result.title}
@@ -482,11 +506,11 @@ export const ReviewPage = () => {
             <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-apple">
               {searchResults.map((result) => (
                 <motion.button
-                  key={result.tax_unit_id}
+                  key={result.article_id}
                   whileHover={{ x: 4 }}
-                  onClick={() => setNewArticleId(result.tax_unit_id)}
+                  onClick={() => setNewArticleId(result.article_id)}
                   className={`w-full text-left p-4 bg-white border rounded-xl transition-all ${
-                    newArticleId === result.tax_unit_id
+                    newArticleId === result.article_id
                       ? 'border-apple-blue bg-apple-blue/10'
                       : 'border-apple-gray-200 hover:border-apple-blue hover:bg-apple-blue/5'
                   }`}
@@ -494,13 +518,13 @@ export const ReviewPage = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium text-apple-gray-900">
-                        {result.breadcrumbs_path}
+                        Статья {result.article_number || '—'}
                       </p>
                       <p className="text-sm text-apple-gray-600 mt-1">
                         {result.title}
                       </p>
                     </div>
-                    {newArticleId === result.tax_unit_id && (
+                    {newArticleId === result.article_id && (
                       <Check className="w-5 h-5 text-apple-blue" />
                     )}
                   </div>

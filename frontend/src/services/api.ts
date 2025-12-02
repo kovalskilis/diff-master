@@ -9,6 +9,7 @@ import type {
   Snapshot,
   TaskStatus,
   SearchResult,
+  ArticleSearchResult,
 } from '@/types';
 
 // Single source of truth for API base URL
@@ -220,9 +221,10 @@ export const editsAPI = {
     return response.data;
   },
 
-  updateTarget: async (targetId: number, confirmedTaxUnitId: number): Promise<EditTarget> => {
+  // Update target by binding to a specific article
+  updateTarget: async (targetId: number, articleId: number): Promise<EditTarget> => {
     const response = await api.put(`/api/edits/target/${targetId}`, {
-      confirmed_tax_unit_id: confirmedTaxUnitId,
+      article_id: articleId,
     });
     return response.data;
   },
@@ -301,8 +303,9 @@ export const searchAPI = {
     return response.data;
   },
 
-  searchTaxUnits: async (query: string, documentId: number, limit: number = 50): Promise<SearchResult[]> => {
-    const response = await api.get('/api/search/tax-units', {
+  // Autocomplete/search for articles by number/title/content snippet
+  searchArticles: async (query: string, documentId: number, limit: number = 50): Promise<ArticleSearchResult[]> => {
+    const response = await api.get('/api/search/articles', {
       params: { q: query, document_id: documentId, limit },
     });
     return response.data;
