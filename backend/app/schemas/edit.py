@@ -15,6 +15,8 @@ class EditTargetResponse(BaseModel):
     # Additional fields for UI
     article_title: Optional[str] = None
     base_document_id: Optional[int] = None
+    # Whether the referenced article exists in the current document
+    article_exists: Optional[bool] = None
     
     model_config = ConfigDict(from_attributes=True)
 

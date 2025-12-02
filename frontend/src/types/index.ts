@@ -46,6 +46,8 @@ export interface EditTarget {
   article_title?: string;
   base_document_id?: number | null;
   confirmed_tax_unit_breadcrumbs?: string | null;
+  // Whether the referenced article exists in the current document
+  article_exists?: boolean;
 }
 
 export interface DiffItem {

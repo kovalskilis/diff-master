@@ -277,14 +277,21 @@ export const ReviewPage = () => {
               >
                 Добавить правку
               </Button>
-              <Button
-                variant="primary"
-                icon={<Play />}
-                onClick={handleStartPhase2}
-                disabled={targets.some(t => !t.article_id)}
-              >
-                Применить правки
-              </Button>
+              {(() => {
+                const hasUnconfirmed = targets.some(t => !t.article_id);
+                return (
+                  <Button
+                    variant="primary"
+                    icon={<Play />}
+                    onClick={handleStartPhase2}
+                    disabled={hasUnconfirmed}
+                    disabledTooltip="Нельзя применить: есть правки без выбранной статьи. Нажмите «Изменить» и выберите статью."
+                    className={hasUnconfirmed ? 'cursor-not-allowed' : undefined}
+                  >
+                    Применить правки
+                  </Button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -347,9 +354,15 @@ export const ReviewPage = () => {
                               {target.confirmed_tax_unit_breadcrumbs}
                             </span>
                           ) : target.article_number ? (
-                            <span className="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-3 py-1 rounded-lg">
-                              Статья {target.article_number}
-                            </span>
+                            target.article_exists === false ? (
+                              <span className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-3 py-1 rounded-lg">
+                                Статья {target.article_number} — статья отсутствует в документе
+                              </span>
+                            ) : (
+                              <span className="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-3 py-1 rounded-lg">
+                                Статья {target.article_number}
+                              </span>
+                            )
                           ) : (
                             <span className="text-apple-gray-400 dark:text-apple-gray-500">
                               Не определено

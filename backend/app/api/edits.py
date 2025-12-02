@@ -95,6 +95,16 @@ async def get_edit_targets(
     if not workspace_file:
         raise HTTPException(status_code=404, detail="Workspace file not found")
     
+    # Build a set of available article numbers for this document
+    available_numbers = set()
+    if workspace_file.base_document_id:
+        numbers_result = await session.execute(
+            select(Article.article_number).where(
+                Article.base_document_id == workspace_file.base_document_id
+            )
+        )
+        available_numbers = set(numbers_result.scalars().all())
+    
     # Get all edit targets with relationships preloaded
     # Flush session to ensure we get latest data
     await session.flush()
@@ -121,6 +131,9 @@ async def get_edit_targets(
         if target.article:
             article_title = target.article.title
         
+        # Determine existence: either article_id is set or article_number exists in the document
+        article_exists = bool(target.article_id) or (bool(article_number) and article_number in available_numbers)
+        
         response = EditTargetResponse(
             id=target.id,
             workspace_file_id=target.workspace_file_id,
@@ -130,7 +143,8 @@ async def get_edit_targets(
             article_id=target.article_id,
             conflicts_json=target.conflicts_json,
             base_document_id=workspace_file.base_document_id,
-            article_title=article_title
+            article_title=article_title,
+            article_exists=article_exists
         )
         print(f"[API] Returning target {target.id} with article_id={target.article_id}")
         
@@ -180,16 +194,22 @@ async def create_edit_target(
     
     print(f"[API] Target {new_target.id} created successfully")
     
+    # Load article to build response
+    article_title = article.title
+    article_number = article.article_number
+    article_exists = True  # created with explicit article_id
+    
     response = EditTargetResponse(
         id=new_target.id,
         workspace_file_id=new_target.workspace_file_id,
         status=new_target.status,
         instruction_text=new_target.instruction_text,
-        article_number=article.article_number,
+        article_number=article_number,
         article_id=new_target.article_id,
         conflicts_json=new_target.conflicts_json,
         base_document_id=article.base_document_id,
-        article_title=article.title
+        article_title=article_title,
+        article_exists=article_exists
     )
     
     return response
@@ -248,6 +268,24 @@ async def update_edit_target(
             article_title = article.title
             article_number = article.article_number
     
+    # Determine available numbers for existence check
+    available_numbers = set()
+    if workspace_file and workspace_file.base_document_id:
+        numbers_result = await session.execute(
+            select(Article.article_number).where(
+                Article.base_document_id == workspace_file.base_document_id
+            )
+        )
+        available_numbers = set(numbers_result.scalars().all())
+    
+    # Compute existence flag
+    conflicts_article_number = None
+    if target.conflicts_json:
+        conflicts_article_number = target.conflicts_json.get('article')
+    article_exists = bool(target.article_id) or (
+        bool(conflicts_article_number) and conflicts_article_number in available_numbers
+    )
+    
     response = EditTargetResponse(
         id=target.id,
         workspace_file_id=target.workspace_file_id,
@@ -257,7 +295,8 @@ async def update_edit_target(
         article_id=target.article_id,
         conflicts_json=target.conflicts_json,
         base_document_id=workspace_file.base_document_id if workspace_file else None,
-        article_title=article_title
+        article_title=article_title,
+        article_exists=article_exists
     )
     
     return response

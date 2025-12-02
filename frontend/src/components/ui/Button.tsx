@@ -8,6 +8,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
   icon?: ReactNode;
   children: ReactNode;
+  // Optional tooltip text shown when the button is disabled
+  disabledTooltip?: string;
 }
 
 export const Button = ({
@@ -18,6 +20,7 @@ export const Button = ({
   children,
   className,
   disabled,
+  disabledTooltip,
   ...props
 }: ButtonProps) => {
   const baseStyles = 'font-medium rounded-xl transition-all duration-200 inline-flex items-center justify-center gap-2';
@@ -37,24 +40,40 @@ export const Button = ({
   const MotionButton = motion.button as any;
   
   return (
-    <MotionButton
-      whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
-      className={cn(
-        baseStyles,
-        variants[variant],
-        sizes[size],
-        className
-      )}
-      disabled={disabled || isLoading}
-      {...props}
-    >
-      {isLoading ? (
-        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-      ) : icon ? (
-        <span className="w-5 h-5">{icon}</span>
+    <span className="relative inline-block group">
+      <MotionButton
+        whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
+        className={cn(
+          baseStyles,
+          variants[variant],
+          sizes[size],
+          className
+        )}
+        disabled={disabled || isLoading}
+        {...props}
+      >
+        {isLoading ? (
+          <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        ) : icon ? (
+          <span className="w-5 h-5">{icon}</span>
+        ) : null}
+        {children}
+      </MotionButton>
+
+      {disabled && disabledTooltip ? (
+        <span
+          className={cn(
+            'pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2',
+            'bg-apple-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg ring-1 ring-black/10',
+            'opacity-0 group-hover:opacity-100 whitespace-normal break-words leading-snug z-50',
+            'min-w-[18rem] max-w-[32rem] text-left'
+          )}
+          role="tooltip"
+        >
+          {disabledTooltip}
+        </span>
       ) : null}
-      {children}
-    </MotionButton>
+    </span>
   );
 };
 
