@@ -7,8 +7,10 @@ from database import get_async_session
 from auth import current_active_user
 from models.user import User
 from models.document import WorkspaceFile, BaseDocument, AuditAction
+from utils.auth_utils import get_user_id
 from schemas.document import WorkspaceFileResponse
 from services.audit_service import AuditService
+from config import settings
 
 
 import sys
@@ -32,19 +34,24 @@ async def upload_workspace_file(
     FR-3: Upload edit file (.docx, .txt, or plain text)
     This only uploads the file, does not trigger LLM processing
     """
-    # Verify document belongs to user
-    result = await session.execute(
-        select(BaseDocument).where(
-            BaseDocument.id == base_document_id,
-            BaseDocument.user_id == user.id
+    # Verify document exists (and belongs to user if auth is enabled)
+    if settings.DISABLE_AUTH:
+        result = await session.execute(
+            select(BaseDocument).where(BaseDocument.id == base_document_id)
         )
-    )
+    else:
+        result = await session.execute(
+            select(BaseDocument).where(
+                BaseDocument.id == base_document_id,
+                BaseDocument.user_id == user.id
+            )
+        )
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
     workspace_file = WorkspaceFile(
-        user_id=user.id,
+        user_id=get_user_id() if settings.DISABLE_AUTH else user.id,
         base_document_id=base_document_id
     )
     
@@ -140,7 +147,8 @@ async def list_workspace_files(
     user: User = Depends(current_active_user)
 ):
     """Get all workspace files for user"""
-    query = select(WorkspaceFile).where(WorkspaceFile.user_id == user.id)
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
+    query = select(WorkspaceFile).where(WorkspaceFile.user_id == user_id)
     
     if base_document_id:
         query = query.where(WorkspaceFile.base_document_id == base_document_id)
@@ -157,10 +165,11 @@ async def get_workspace_file(
     user: User = Depends(current_active_user)
 ):
     """Get specific workspace file"""
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == user_id
         )
     )
     file = result.scalar_one_or_none()
@@ -178,10 +187,11 @@ async def delete_workspace_file(
     user: User = Depends(current_active_user)
 ):
     """Delete workspace file"""
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == user_id
         )
     )
     file = result.scalar_one_or_none()

@@ -11,7 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { editsAPI, searchAPI } from '@/services/api';
-import type { EditTarget, ArticleSearchResult } from '@/types';
+import type { EditTarget, SearchResult } from '@/types';
 
 export const ReviewPage = () => {
   const { workspaceFileId } = useParams<{ workspaceFileId: string }>();
@@ -23,7 +23,7 @@ export const ReviewPage = () => {
   // Edit modal state
   const [editingTarget, setEditingTarget] = useState<EditTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ArticleSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
   // Add new target modal state
@@ -128,7 +128,7 @@ export const ReviewPage = () => {
 
     const handle = setTimeout(async () => {
       try {
-        const results = await searchAPI.searchArticles(query, documentId);
+        const results = await searchAPI.searchTaxUnits(query, documentId);
         setSearchResults(results);
       } catch (error) {
         // swallow autocomplete errors
@@ -152,7 +152,7 @@ export const ReviewPage = () => {
     
     setIsSearching(true);
     try {
-      const results = await searchAPI.searchArticles(searchQuery, documentId);
+      const results = await searchAPI.searchTaxUnits(searchQuery, documentId);
       setSearchResults(results);
       
       if (results.length === 0) {

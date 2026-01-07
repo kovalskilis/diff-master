@@ -1,6 +1,6 @@
 import uuid
 from typing import Optional
-from fastapi import Depends, Request
+from fastapi import Depends, Request, HTTPException, status
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -9,6 +9,7 @@ from fastapi_users.authentication import (
 )
 from fastapi_users.db import SQLAlchemyUserDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi_users import exceptions
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from models.user import User
 from database import get_async_session
 from config import settings
 from services.email_service import EmailService
+from utils.auth_utils import DUMMY_USER_ID, ensure_dummy_user
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
@@ -98,5 +100,32 @@ auth_backend = AuthenticationBackend(
 fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 
 # Enforce email verification across protected endpoints
-current_active_user = fastapi_users.current_user(active=True, verified=True)
+_original_current_active_user = fastapi_users.current_user(active=True, verified=True)
+
+
+def get_current_active_user():
+    """
+    Возвращает зависимость для получения текущего пользователя.
+    Если DISABLE_AUTH=True, возвращает dummy пользователя без проверки токена.
+    """
+    if settings.DISABLE_AUTH:
+        async def get_dummy_user(session: AsyncSession = Depends(get_async_session)) -> User:
+            await ensure_dummy_user(session)
+            result = await session.execute(
+                select(User).where(User.id == DUMMY_USER_ID)
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Dummy user not found"
+                )
+            return user
+        return get_dummy_user
+    else:
+        return _original_current_active_user
+
+
+# Экспортируем зависимость
+current_active_user = get_current_active_user()
 

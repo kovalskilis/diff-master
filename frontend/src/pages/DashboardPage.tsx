@@ -1,31 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileText, Upload, Plus, Trash2, LogOut, Eye, Moon, Sun } from 'lucide-react';
+import { FileText, Trash2, Eye, Moon, Sun, Database } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { SkeletonCard } from '@/components/ui/LoadingSpinner';
-import { DocumentStructure } from '@/components/ui/DocumentStructure';
 import { DeletingWidget } from '@/components/ui/DeletingWidget';
 import { ToastContainer } from '@/components/ui/Toast';
-import { useAuthStore } from '@/hooks/useAuthStore';
 import { useThemeStore } from '@/hooks/useTheme';
 import { useToast } from '@/hooks/useToast';
-import { documentsAPI } from '@/services/api';
+import { documentsAPI, workspaceAPI } from '@/services/api';
 import type { Document } from '@/types';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
-  const { toasts, removeToast, success } = useToast();
+  const { toasts, removeToast, success, error } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [isUploadingBase, setIsUploadingBase] = useState(false);
+  const [isUploadingEdits, setIsUploadingEdits] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,19 +38,72 @@ export const DashboardPage = () => {
     }
   };
 
-  const handleUpload = async (file: File) => {
-    setIsUploading(true);
+  const handleUploadBase = async (file: File) => {
+    setIsUploadingBase(true);
     try {
       const newDoc = await documentsAPI.import(file);
       setDocuments(prev => [newDoc, ...prev]);
-      setSelectedDocument(newDoc); // Show structure of newly uploaded document
-      setIsUploadModalOpen(false);
-      success('Документ загружен', `Файл "${file.name}" успешно загружен`);
-    } catch (err) {
+      success('Документ загружен', `Базовый документ "${file.name}" успешно загружен`);
+    } catch (err: any) {
       console.error('Upload failed:', err);
-      success('Ошибка загрузки', 'Не удалось загрузить документ');
+      let errorMessage = 'Не удалось загрузить базовый документ';
+      
+      if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен на http://localhost:8000';
+      } else if (err?.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      error('Ошибка загрузки', errorMessage);
     } finally {
-      setIsUploading(false);
+      setIsUploadingBase(false);
+    }
+  };
+
+  const getLatestBaseDocument = async (): Promise<number | null> => {
+    try {
+      const latestDoc = await documentsAPI.getLatest();
+      return latestDoc.id;
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  };
+
+  const handleUploadEdits = async (file: File) => {
+    setIsUploadingEdits(true);
+    try {
+      // Автоматически получаем последний загруженный базовый документ
+      const latestDocumentId = await getLatestBaseDocument();
+      
+      if (!latestDocumentId) {
+        error('Ошибка', 'Сначала загрузите базовый документ');
+        return;
+      }
+
+      await workspaceAPI.uploadFile(latestDocumentId, file);
+      success('Правки загружены', `Файл "${file.name}" успешно загружен`);
+      // Переход на страницу документа для работы с правками
+      navigate(`/document/${latestDocumentId}`);
+    } catch (err: any) {
+      console.error('Edits upload failed:', err);
+      let errorMessage = 'Не удалось загрузить файл с правками';
+      
+      if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен на http://localhost:8000';
+      } else if (err?.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      error('Ошибка загрузки', errorMessage);
+    } finally {
+      setIsUploadingEdits(false);
     }
   };
 
@@ -78,11 +126,6 @@ export const DashboardPage = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">
       {/* Header */}
@@ -94,7 +137,7 @@ export const DashboardPage = () => {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-apple-gray-900 dark:text-apple-gray-50">Legal Diff</h1>
-              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">{user?.email}</p>
+              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">Система обработки документов</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -106,9 +149,6 @@ export const DashboardPage = () => {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
-            <Button variant="ghost" onClick={handleLogout} icon={<LogOut />}>
-              Выйти
-            </Button>
           </div>
         </div>
       </header>
@@ -119,158 +159,162 @@ export const DashboardPage = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
+          className="space-y-12"
         >
-          <div className="flex items-center justify-between mb-8">
+          {/* Two Main Sections Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+            {/* Section 1: Base Documents (Permanent Storage) */}
             <div>
-              <h2 className="text-3xl font-bold text-apple-gray-900 dark:text-apple-gray-50 mb-2">
-                Мои документы
-              </h2>
-              <p className="text-apple-gray-600 dark:text-apple-gray-400">
-                Загрузите базовый документ для начала работы
-              </p>
+              {/* Upload New Base Document */}
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle>Загрузить базовый документ</CardTitle>
+                  <CardDescription>
+                    Загрузите базовую версию документа для постоянного хранения
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FileUpload 
+                    onUpload={handleUploadBase} 
+                    isLoading={isUploadingBase}
+                  />
+                </CardContent>
+              </Card>
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="primary"
-                icon={<Plus />}
-                onClick={() => setIsUploadModalOpen(true)}
-              >
-                Новый документ
-              </Button>
+
+            {/* Section 2: Edits (Temporary Upload) */}
+            <div>
+              {/* Edits File Upload */}
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle>Загрузить документ с правками</CardTitle>
+                  <CardDescription>
+                    Загрузите файл с изменениями для применения к выбранному документу
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FileUpload 
+                    onUpload={handleUploadEdits} 
+                    isLoading={isUploadingEdits}
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
 
-          {/* Documents Grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+          {/* Base Documents List */}
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Database className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-apple-gray-900 dark:text-apple-gray-50">
+                  Загруженные документы
+                </h2>
+                <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">
+                  Список всех загруженных базовых документов
+                </p>
+              </div>
             </div>
-          ) : documents.length === 0 ? (
-            <Card className="text-center py-12">
-              <Upload className="w-16 h-16 text-apple-gray-300 mx-auto mb-4" />
-              <CardTitle className="mb-2">Нет документов</CardTitle>
-              <CardDescription className="mb-6">
-                Загрузите первый документ для начала работы
-              </CardDescription>
-              <Button
-                variant="primary"
-                icon={<Plus />}
-                onClick={() => setIsUploadModalOpen(true)}
-              >
-                Загрузить документ
-              </Button>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {documents.map((doc, idx) => (
-                <motion.div
-                  key={doc.id}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: idx * 0.1 }}
-                >
-                  {deletingId === doc.id ? (
-                    <DeletingWidget documentName={doc.name} />
-                  ) : (
-                    <Card hover onClick={() => navigate(`/document/${doc.id}`)}>
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-apple-blue/10 rounded-xl">
-                          <FileText className="w-6 h-6 text-apple-blue" />
+
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3].map(i => <SkeletonCard key={i} />)}
+              </div>
+            ) : documents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {documents.map((doc) => (
+                  <motion.div
+                    key={doc.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    {deletingId === doc.id ? (
+                      <DeletingWidget documentName={doc.name} />
+                    ) : (
+                      <Card hover onClick={() => navigate(`/document/${doc.id}`)}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                            <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/document/${doc.id}`);
+                              }}
+                              className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              title="Открыть документ"
+                            >
+                              <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(doc.id);
+                              }}
+                              disabled={deletingId !== null}
+                              className={`p-2 rounded-lg transition-colors ${
+                                deletingId !== null 
+                                  ? 'bg-gray-100 cursor-not-allowed' 
+                                  : 'hover:bg-red-50 dark:hover:bg-red-900/20'
+                              }`}
+                              title={deletingId !== null ? "Удаление в процессе..." : "Удалить"}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              // Always load fresh document with structure
-                              try {
-                                const fullDoc = await documentsAPI.get(doc.id);
-                                setSelectedDocument(fullDoc);
-                              } catch (error) {
-                                console.error('Failed to load document structure:', error);
-                                // Fallback to cached document
-                                setSelectedDocument(doc);
-                              }
-                            }}
-                            className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Показать структуру"
-                          >
-                            <Eye className="w-4 h-4 text-apple-blue" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(doc.id);
-                            }}
-                            disabled={deletingId !== null}
-                            className={`p-2 rounded-lg transition-colors ${
-                              deletingId !== null 
-                                ? 'bg-gray-100 cursor-not-allowed' 
-                                : 'hover:bg-red-50'
-                            }`}
-                            title={deletingId !== null ? "Удаление в процессе..." : "Удалить"}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </button>
+                        <h3 className="font-semibold text-apple-gray-900 dark:text-apple-gray-50 mb-2 truncate">
+                          {doc.name}
+                        </h3>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                            doc.source_type === 'docx' 
+                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' 
+                              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                          }`}>
+                            {doc.source_type.toUpperCase()}
+                          </span>
+                          {doc.structure && Object.keys(doc.structure).length > 0 && (
+                            <span className="text-xs text-apple-gray-500">
+                              {Object.keys(doc.structure).length} {Object.keys(doc.structure).length === 1 ? 'статья' : 'статей'}
+                            </span>
+                          )}
                         </div>
-                      </div>
-                      <h3 className="font-semibold text-apple-gray-900 mb-2 truncate">
-                        {doc.name}
-                      </h3>
-                      <p className="text-sm text-apple-gray-500">
-                        {new Date(doc.imported_at).toLocaleDateString('ru-RU', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </p>
-                    </Card>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          )}
+                        <p className="text-xs text-apple-gray-500">
+                          Загружен {new Date(doc.imported_at).toLocaleDateString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })} в {new Date(doc.imported_at).toLocaleTimeString('ru-RU', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      </Card>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <Card className="text-center py-12">
+                <Database className="w-16 h-16 text-apple-gray-300 dark:text-apple-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-apple-gray-900 dark:text-apple-gray-50 mb-2">
+                  Нет загруженных документов
+                </h3>
+                <p className="text-apple-gray-600 dark:text-apple-gray-400">
+                  Загрузите первый документ для начала работы
+                </p>
+              </Card>
+            )}
+          </section>
         </motion.div>
       </main>
-
-      {/* Upload Modal */}
-      <Modal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        title="Загрузить базовый документ"
-        description="Выберите файл .docx или .txt с базовой версией документа"
-        size="md"
-      >
-        <FileUpload onUpload={handleUpload} isLoading={isUploading} />
-      </Modal>
-
-      {/* Document Structure Modal */}
-      <Modal
-        isOpen={!!selectedDocument}
-        onClose={() => setSelectedDocument(null)}
-        title={selectedDocument ? `Структура: ${selectedDocument.name}` : ''}
-        description="Просмотр структуры документа по статьям"
-        size="xl"
-      >
-        {selectedDocument && selectedDocument.structure && Object.keys(selectedDocument.structure).length > 0 && (
-          <DocumentStructure structure={selectedDocument.structure} />
-        )}
-        {selectedDocument && selectedDocument.structure && Object.keys(selectedDocument.structure).length === 0 && (
-          <div className="text-center py-8 text-apple-gray-500">
-            <p>Структура пуста (0 статей)</p>
-          </div>
-        )}
-        {selectedDocument && !selectedDocument.structure && (
-          <div className="text-center py-8 text-apple-gray-500">
-            <p>Структура документа не найдена</p>
-          </div>
-        )}
-      </Modal>
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
-

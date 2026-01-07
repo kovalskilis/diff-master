@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from typing import List, Dict
 import uuid
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ from models.document import BaseDocument, Article, Snapshot, AuditLog, AuditActi
 from schemas.document import BaseDocumentResponse, ArticleResponse, TaxUnitHierarchyResponse
 from services.audit_service import AuditService
 from services.parsing import parse_document_structure, parse_txt_structure, extract_edits_for_review
+from utils.auth_utils import get_user_id, ensure_dummy_user
+from config import settings
 
 import sys
 from pathlib import Path
@@ -48,6 +50,10 @@ async def import_document(
             detail="Only .docx and .txt files are supported"
         )
     
+    # Ensure dummy user exists if auth is disabled
+    if settings.DISABLE_AUTH:
+        await ensure_dummy_user(session)
+    
     # Read file content
     content = await file.read()
     source_type = "docx" if file.filename.endswith('.docx') else "txt"
@@ -61,7 +67,7 @@ async def import_document(
     
     # Create base document
     base_doc = BaseDocument(
-        user_id=user.id,
+        user_id=get_user_id() if settings.DISABLE_AUTH else user.id,
         name=file.filename,
         source_type=source_type
     )
@@ -83,7 +89,7 @@ async def import_document(
     
     # Create initial snapshot
     snapshot = Snapshot(
-        user_id=user.id,
+        user_id=get_user_id() if settings.DISABLE_AUTH else user.id,
         base_document_id=base_doc.id,
         comment="Initial import"
     )
@@ -140,8 +146,9 @@ async def list_documents(
     user: User = Depends(current_active_user)
 ):
     """Get all documents for current user"""
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
     result = await session.execute(
-        select(BaseDocument).where(BaseDocument.user_id == user.id)
+        select(BaseDocument).where(BaseDocument.user_id == user_id)
     )
     documents = result.scalars().all()
     
@@ -186,6 +193,53 @@ async def list_documents(
     return document_list
 
 
+@router.get("/documents/latest", response_model=BaseDocumentResponse)
+async def get_latest_document(
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user)
+):
+    """Get the most recently imported base document"""
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
+    result = await session.execute(
+        select(BaseDocument)
+        .where(BaseDocument.user_id == user_id)
+        .order_by(desc(BaseDocument.imported_at))
+        .limit(1)
+    )
+    document = result.scalar_one_or_none()
+    
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Нет загруженных базовых документов"
+        )
+    
+    # Build structure from articles
+    articles_result = await session.execute(
+        select(Article).where(Article.base_document_id == document.id)
+    )
+    articles = articles_result.scalars().all()
+    
+    structure = {}
+    if articles:
+        for article in articles:
+            structure[article.article_number] = {
+                "title": article.title or "",
+                "content": article.content
+            }
+    
+    # Return document with structure for frontend compatibility
+    document_dict = {
+        "id": document.id,
+        "name": document.name,
+        "source_type": document.source_type,
+        "imported_at": document.imported_at,
+        "structure": structure
+    }
+    
+    return document_dict
+
+
 @router.get("/documents/{document_id}", response_model=BaseDocumentResponse)
 async def get_document(
     document_id: int,
@@ -193,10 +247,11 @@ async def get_document(
     user: User = Depends(current_active_user)
 ):
     """Get specific document"""
+    user_id = get_user_id() if settings.DISABLE_AUTH else user.id
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -239,7 +294,7 @@ async def get_document_structure(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id)
         )
     )
     document = result.scalar_one_or_none()
@@ -261,7 +316,7 @@ async def get_document_articles(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id)
         )
     )
     document = result.scalar_one_or_none()
@@ -355,7 +410,7 @@ async def delete_document(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id)
         )
     )
     document = result.scalar_one_or_none()

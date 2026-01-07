@@ -1,6 +1,5 @@
 import axios from 'axios';
 import type {
-  User,
   Document,
   TaxUnitHierarchy,
   WorkspaceFile,
@@ -9,11 +8,18 @@ import type {
   Snapshot,
   TaskStatus,
   SearchResult,
-  ArticleSearchResult,
 } from '@/types';
 
 // Single source of truth for API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// In development, use relative path to leverage Vite proxy
+// In production, use VITE_API_URL or default to localhost:8000
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.DEV ? '' : 'http://localhost:8000');
+
+// Log API configuration for debugging
+if (import.meta.env.DEV) {
+  console.log('API Base URL:', API_BASE_URL || '(using Vite proxy)');
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -22,28 +28,16 @@ const api = axios.create({
   },
 });
 
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
 // Normalize error responses to human-readable messages
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
-      // Clear token and redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('auth-storage');
-      window.location.href = '/login';
+    // Handle network errors
+    if (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error') {
+      error.normalizedMessage = 'Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен на http://localhost:8000';
       return Promise.reject(error);
     }
-
+    
     const data = error?.response?.data;
     const msg =
       data?.message ||
@@ -58,68 +52,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// Auth API
-export const authAPI = {
-  login: async (email: string, password: string) => {
-    const body = new URLSearchParams();
-    body.set('username', email);
-    body.set('password', password);
-    
-    try {
-      const response = await api.post('/auth/jwt/login', body, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      return response.data;
-    } catch (error: any) {
-      // If CORS error, try with credentials in a different way
-      if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
-        console.log('CORS error detected, trying alternative method');
-        
-        // Use fetch directly with credentials (same x-www-form-urlencoded format)
-        const fetchBody = new URLSearchParams();
-        fetchBody.set('username', email);
-        fetchBody.set('password', password);
-        
-        const fetchResponse = await fetch(`${API_BASE_URL}/auth/jwt/login`, {
-          method: 'POST',
-          body: fetchBody,
-          credentials: 'include',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        });
-        
-        if (fetchResponse.ok) {
-          const data = await fetchResponse.json();
-          console.log('Login successful via fetch:', data);
-          return data;
-        }
-      }
-      throw error;
-    }
-  },
-
-  register: async (email: string, password: string) => {
-    const response = await api.post('/auth/register', { email, password });
-    return response.data;
-  },
-
-  requestVerify: async (email: string) => {
-    const response = await api.post('/auth/request-verify-token', { email });
-    return response.data;
-  },
-
-  logout: async () => {
-    await api.post('/auth/jwt/logout');
-  },
-
-  getMe: async (): Promise<User> => {
-    const response = await api.get('/users/me');
-    return response.data;
-  },
-};
 
 // Documents API
 export const documentsAPI = {
@@ -139,6 +71,11 @@ export const documentsAPI = {
 
   get: async (id: number): Promise<Document> => {
     const response = await api.get(`/api/documents/${id}`);
+    return response.data;
+  },
+
+  getLatest: async (): Promise<Document> => {
+    const response = await api.get('/api/documents/latest');
     return response.data;
   },
 
@@ -221,10 +158,9 @@ export const editsAPI = {
     return response.data;
   },
 
-  // Update target by binding to a specific article
-  updateTarget: async (targetId: number, articleId: number): Promise<EditTarget> => {
+  updateTarget: async (targetId: number, confirmedTaxUnitId: number): Promise<EditTarget> => {
     const response = await api.put(`/api/edits/target/${targetId}`, {
-      article_id: articleId,
+      confirmed_tax_unit_id: confirmedTaxUnitId,
     });
     return response.data;
   },
@@ -242,9 +178,10 @@ export const editsAPI = {
     return response.data;
   },
 
-  startPhase2: async (workspaceFileId: number) => {
+  startPhase2: async (workspaceFileId: number, forceReapply: boolean = false) => {
     const response = await api.post('/api/edits/apply/phase2', {
       workspace_file_id: workspaceFileId,
+      force_reapply: forceReapply,
     });
     return response.data;
   },
@@ -303,9 +240,8 @@ export const searchAPI = {
     return response.data;
   },
 
-  // Autocomplete/search for articles by number/title/content snippet
-  searchArticles: async (query: string, documentId: number, limit: number = 50): Promise<ArticleSearchResult[]> => {
-    const response = await api.get('/api/search/articles', {
+  searchTaxUnits: async (query: string, documentId: number, limit: number = 50): Promise<SearchResult[]> => {
+    const response = await api.get('/api/search/tax-units', {
       params: { q: query, document_id: documentId, limit },
     });
     return response.data;

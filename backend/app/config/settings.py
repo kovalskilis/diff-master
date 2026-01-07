@@ -48,6 +48,7 @@ class SecuritySettings(BaseSettings):
         default=60 * 24 * 7,
         validation_alias=AliasChoices("SECURITY_ACCESS_TOKEN_EXPIRE_MINUTES", "ACCESS_TOKEN_EXPIRE_MINUTES"),
     )
+    DISABLE_AUTH: bool = Field(default=False, validation_alias=AliasChoices("SECURITY_DISABLE_AUTH", "DISABLE_AUTH"))
 
     model_config = SettingsConfigDict(env_prefix="SECURITY_", **COMMON_MODEL_CONFIG)
 
@@ -178,6 +179,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return self.CORS.origins_list
+
+    @property
+    def DISABLE_AUTH(self) -> bool:
+        return self.SECURITY.DISABLE_AUTH
 
 
 settings = Settings()

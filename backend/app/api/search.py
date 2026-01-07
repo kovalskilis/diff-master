@@ -8,6 +8,8 @@ from auth import current_active_user
 from models.user import User
 from models.document import Article, ArticleVersion, BaseDocument
 from schemas.document import SearchResult
+from utils.auth_utils import get_user_id
+from config import settings
 
 
 import sys
@@ -36,7 +38,7 @@ async def search_documents(
     
     # Build query with FTS
     base_query = select(Article).where(Article.base_document_id.in_(
-        select(BaseDocument.id).where(BaseDocument.user_id == user.id)
+        select(BaseDocument.id).where(BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id))
     ))
     
     if document_id:
@@ -82,7 +84,7 @@ async def search_articles_simple(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id)
         )
     )
     document = result.scalar_one_or_none()

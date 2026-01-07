@@ -9,6 +9,8 @@ from models.user import User
 from models.document import Snapshot, BaseDocument, PatchedFragment, Article, ArticleVersion, AuditAction, EditTarget
 from schemas.document import SnapshotResponse
 from services.audit_service import AuditService
+from utils.auth_utils import get_user_id
+from config import settings
 
 
 import sys
@@ -33,7 +35,7 @@ async def list_versions(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == (get_user_id() if settings.DISABLE_AUTH else user.id)
         )
     )
     document = result.scalar_one_or_none()
