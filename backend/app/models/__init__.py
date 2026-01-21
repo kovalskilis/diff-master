@@ -1,4 +1,4 @@
-# from .user import User
+# User model removed - authentication disabled
 # from .document import (
 #     BaseDocument,
 #     TaxUnit,
@@ -12,7 +12,6 @@
 # )
 
 __all__ = [
-    "User",
     "BaseDocument",
     "TaxUnit",
     "TaxUnitVersion",

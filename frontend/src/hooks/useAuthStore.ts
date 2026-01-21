@@ -1,6 +1,8 @@
+/**
+ * Auth store stub - authentication is disabled
+ * This file provides a minimal interface for compatibility with existing code
+ */
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { authAPI } from '@/services/api';
 import type { User } from '@/types';
 
 interface AuthState {
@@ -17,101 +19,41 @@ interface AuthState {
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
+// Dummy user for compatibility
+const dummyUser: User = {
+  id: '00000000-0000-0000-0000-000000000001',
+  email: 'dummy@example.com',
+  is_active: true,
+  is_superuser: false,
+  is_verified: true,
+};
 
-  login: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const data = await authAPI.login(email, password);
-      const token = data?.access_token || data?.token || data?.accessToken;
-      if (!token) {
-        throw new Error('Не удалось получить токен авторизации');
-      }
-      localStorage.setItem('token', token);
-      
-      const user = await authAPI.getMe();
-      console.log('Login successful, user:', user, 'token:', token);
-      set({ user, token, isAuthenticated: true, isLoading: false });
-      console.log('State updated with isAuthenticated: true');
-      
-      // Force state synchronization with localStorage
-      const currentState = useAuthStore.getState();
-      console.log('Current state after set:', currentState);
-    } catch (error: any) {
-      const data = error?.response?.data;
-      const msg = data?.message || data?.detail || (Array.isArray(data?.errors) ? data.errors.map((e: any) => (e.field ? `${e.field}: ${e.message}` : e.message)).join(', ') : null) || 'Ошибка входа';
-      set({ error: msg, isLoading: false });
-      throw error;
-    }
+// Stub implementation using zustand - all methods are no-ops
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: dummyUser,
+  token: null,
+  isAuthenticated: true, // Always authenticated when auth is disabled
+  isLoading: false,
+  error: null,
+  
+  login: async () => {
+    // No-op - authentication disabled
   },
-
-  register: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      await authAPI.register(email, password);
-      set({ isLoading: false });
-    } catch (error: any) {
-      const data = error?.response?.data;
-      const msg = data?.message || data?.detail || (Array.isArray(data?.errors) ? data.errors.map((e: any) => (e.field ? `${e.field}: ${e.message}` : e.message)).join(', ') : null) || 'Ошибка регистрации';
-      set({ error: msg, isLoading: false });
-      throw error;
-    }
+  
+  register: async () => {
+    // No-op - authentication disabled
   },
-
+  
   logout: async () => {
-    try {
-      await authAPI.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('token');
-      set({ user: null, token: null, isAuthenticated: false });
-    }
+    // No-op - authentication disabled
   },
-
+  
   checkAuth: async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      set({ isAuthenticated: false, isLoading: false });
-      return;
-    }
-
-    set({ isLoading: true });
-    try {
-      const user = await authAPI.getMe();
-      set({ user, token, isAuthenticated: true, isLoading: false });
-    } catch (error: any) {
-      // If 401, clear everything and redirect to login
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('auth-storage');
-        set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-        window.location.href = '/login';
-      } else {
-        // For other errors, just clear token but don't redirect
-        localStorage.removeItem('token');
-        set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-      }
-    }
+    // No-op - always authenticated when auth is disabled
+    set({ isAuthenticated: true, user: dummyUser });
   },
-
-  clearError: () => set({ error: null }),
-    }),
-  {
-    name: 'auth-storage',
-    partialize: (state) => ({ 
-      token: state.token, 
-      isAuthenticated: state.isAuthenticated,
-      user: state.user 
-    }),
-  }
-  )
-);
-
+  
+  clearError: () => {
+    set({ error: null });
+  },
+}));

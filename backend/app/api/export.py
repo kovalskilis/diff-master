@@ -5,9 +5,8 @@ from typing import Optional
 import io
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import PatchedFragment, Snapshot, ExcelReport, AuditAction
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from services.export_service import ExportService
 from services.audit_service import AuditService
 
@@ -25,17 +24,19 @@ router = APIRouter()
 async def export_text(
     snapshot_id: int,
     format: str = "txt",  # txt or docx
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-8: Export texts in .txt or .docx format
     """
-    # Verify snapshot belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify snapshot exists
     result = await session.execute(
         select(Snapshot).where(
             Snapshot.id == snapshot_id,
-            Snapshot.user_id == user.id
+            Snapshot.user_id == current_user_id
         )
     )
     snapshot = result.scalar_one_or_none()
@@ -52,7 +53,7 @@ async def export_text(
         
         # Audit log
         await AuditService.log_action(
-            session, user.id, AuditAction.export_txt,
+            session, current_user_id, AuditAction.export_txt,
             entity_type="snapshot",
             entity_id=snapshot_id,
             metadata={"format": "txt"}
@@ -71,7 +72,7 @@ async def export_text(
         
         # Audit log
         await AuditService.log_action(
-            session, user.id, AuditAction.export_txt,
+            session, current_user_id, AuditAction.export_txt,
             entity_type="snapshot",
             entity_id=snapshot_id,
             metadata={"format": "docx"}
@@ -91,13 +92,15 @@ async def export_text(
 async def export_excel(
     snapshot_id: Optional[int] = None,
     workspace_file_id: Optional[int] = None,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-9: Generate Excel report with changes
     Columns: ДЕЙСТВУЮЩАЯ НОРМА НК РФ, НОВАЯ НОРМА, ИЗМЕНЯЕМАЯ/ВВОДИМАЯ НОРМА, ДАТА ВСТУПЛЕНИЯ, КОММЕНТАРИИ
     """
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     if not snapshot_id and not workspace_file_id:
         raise HTTPException(
             status_code=400,
@@ -110,12 +113,12 @@ async def export_excel(
     excel_bytes = await export_service.export_as_excel(
         snapshot_id=snapshot_id,
         workspace_file_id=workspace_file_id,
-        user_id=user.id
+        user_id=current_user_id
     )
     
     # Save report record
     excel_report = ExcelReport(
-        user_id=user.id,
+        user_id=current_user_id,
         snapshot_id=snapshot_id,
         file_path=f"report_{snapshot_id or workspace_file_id}.xlsx"
     )
@@ -123,7 +126,7 @@ async def export_excel(
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.export_excel,
+        session, current_user_id, AuditAction.export_excel,
         entity_type="snapshot" if snapshot_id else "workspace_file",
         entity_id=snapshot_id or workspace_file_id,
         metadata={"report_id": excel_report.id}

@@ -16,9 +16,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import WorkspaceFile, EditTarget, EditJobStatus, AuditAction, Article, PatchedFragment
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from schemas.edit import (
     EditTargetResponse, EditTargetUpdate, EditTargetCreate,
     Phase1Request, Phase1Response,
@@ -35,18 +34,20 @@ router = APIRouter()
 @router.post("/edits/apply/phase1", response_model=Phase1Response)
 async def start_phase1(
     request: Phase1Request,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4 Stage 1: Start "Find Targets" process
     LLM extracts edit instructions and finds matching tax_unit IDs
     """
-    # Verify workspace file belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify workspace file exists
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == request.workspace_file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == current_user_id
         )
     )
     workspace_file = result.scalar_one_or_none()
@@ -56,12 +57,12 @@ async def start_phase1(
     # Start Celery task
     task = phase1_find_targets.delay(
         workspace_file_id=request.workspace_file_id,
-        user_id=str(user.id)
+        user_id=str(current_user_id)
     )
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.phase1_start,
+        session, current_user_id, AuditAction.phase1_start,
         entity_type="workspace_file",
         entity_id=request.workspace_file_id,
         metadata={"task_id": task.id}
@@ -77,18 +78,20 @@ async def start_phase1(
 @router.get("/edits/targets/{workspace_file_id}", response_model=List[EditTargetResponse])
 async def get_edit_targets(
     workspace_file_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4.5: Get list of targets for review stage
     Returns all edit targets with their matched tax units
     """
-    # Verify workspace file belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify workspace file exists
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == workspace_file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == current_user_id
         )
     )
     workspace_file = result.scalar_one_or_none()
@@ -116,7 +119,7 @@ async def get_edit_targets(
         )
         .where(
             EditTarget.workspace_file_id == workspace_file_id,
-            EditTarget.user_id == user.id
+            EditTarget.user_id == current_user_id
         )
     )
     targets = result.scalars().all()
@@ -156,12 +159,14 @@ async def get_edit_targets(
 @router.post("/edits/target", response_model=EditTargetResponse)
 async def create_edit_target(
     create: EditTargetCreate,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     Create a new edit target
     """
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     print(f"[API] Creating target for workspace_file {create.workspace_file_id}, article_id {create.article_id}")
     
     # Get article details
@@ -175,7 +180,7 @@ async def create_edit_target(
     
     # Create new target
     new_target = EditTarget(
-        user_id=user.id,
+        user_id=current_user_id,
         workspace_file_id=create.workspace_file_id,
         status=EditJobStatus.pending,
         instruction_text=create.instruction_text,
@@ -219,24 +224,26 @@ async def create_edit_target(
 async def update_edit_target(
     target_id: int,
     update: EditTargetUpdate,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4.5: Update target's article_id
     Allows user to manually correct LLM's match
     """
-    print(f"[API] Updating target {target_id} with article_id {update.article_id} for user {user.id}")
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    print(f"[API] Updating target {target_id} with article_id {update.article_id}")
     
     result = await session.execute(
         select(EditTarget).where(
             EditTarget.id == target_id,
-            EditTarget.user_id == user.id
+            EditTarget.user_id == current_user_id
         )
     )
     target = result.scalar_one_or_none()
     if not target:
-        print(f"[API] Target {target_id} not found for user {user.id}")
+        print(f"[API] Target {target_id} not found")
         raise HTTPException(status_code=404, detail="Edit target not found")
     
     # Update article_id if provided
@@ -305,23 +312,25 @@ async def update_edit_target(
 @router.delete("/edits/target/{target_id}")
 async def delete_edit_target(
     target_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     Delete an edit target
     """
-    print(f"[API] Deleting target {target_id} for user {user.id}")
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    print(f"[API] Deleting target {target_id}")
     
     result = await session.execute(
         select(EditTarget).where(
             EditTarget.id == target_id,
-            EditTarget.user_id == user.id
+            EditTarget.user_id == current_user_id
         )
     )
     target = result.scalar_one_or_none()
     if not target:
-        print(f"[API] Target {target_id} not found for user {user.id}")
+        print(f"[API] Target {target_id} not found")
         raise HTTPException(status_code=404, detail="Edit target not found")
     
     await session.delete(target)
@@ -334,18 +343,20 @@ async def delete_edit_target(
 @router.post("/edits/apply/phase2", response_model=Phase2Response)
 async def start_phase2(
     request: Phase2Request,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4 Stage 2: Start "Apply Edits" process
     Applies LLM transformations to confirmed targets
     """
-    # Verify workspace file belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify workspace file exists
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == request.workspace_file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == current_user_id
         )
     )
     workspace_file = result.scalar_one_or_none()
@@ -357,7 +368,7 @@ async def start_phase2(
     targets_result = await session.execute(
         select(EditTarget).where(
             EditTarget.workspace_file_id == request.workspace_file_id,
-            EditTarget.user_id == user.id,
+            EditTarget.user_id == current_user_id,
             EditTarget.article_id.isnot(None)
         )
     )
@@ -387,12 +398,12 @@ async def start_phase2(
     # Start Celery task
     task = phase2_apply_edits.delay(
         workspace_file_id=request.workspace_file_id,
-        user_id=str(user.id)
+        user_id=str(current_user_id)
     )
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.phase2_start,
+        session, current_user_id, AuditAction.phase2_start,
         entity_type="workspace_file",
         entity_id=request.workspace_file_id,
         metadata={"task_id": task.id, "force_reapply": request.force_reapply}
@@ -407,8 +418,7 @@ async def start_phase2(
 
 @router.get("/edits/task/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(
-    task_id: str,
-    user: User = Depends(current_active_user)
+    task_id: str
 ):
     """Get status of Celery task"""
     task_result = AsyncResult(task_id)

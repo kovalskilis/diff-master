@@ -1,10 +1,6 @@
-from .user import UserRead, UserCreate, UserUpdate
+# User schemas removed - authentication disabled
 from .document import *
 from .edit import *
 
-__all__ = [
-    "UserRead",
-    "UserCreate", 
-    "UserUpdate",
-]
+__all__ = []
 

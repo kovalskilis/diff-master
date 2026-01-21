@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileText, Upload, Plus, Trash2, LogOut, Eye, Moon, Sun } from 'lucide-react';
+import { FileText, Upload, Plus, Trash2, Eye, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -10,7 +10,6 @@ import { SkeletonCard } from '@/components/ui/LoadingSpinner';
 import { DocumentStructure } from '@/components/ui/DocumentStructure';
 import { DeletingWidget } from '@/components/ui/DeletingWidget';
 import { ToastContainer } from '@/components/ui/Toast';
-import { useAuthStore } from '@/hooks/useAuthStore';
 import { useThemeStore } from '@/hooks/useTheme';
 import { useToast } from '@/hooks/useToast';
 import { documentsAPI } from '@/services/api';
@@ -18,7 +17,6 @@ import type { Document } from '@/types';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const { toasts, removeToast, success } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -78,11 +76,6 @@ export const DashboardPage = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">
       {/* Header */}
@@ -94,7 +87,7 @@ export const DashboardPage = () => {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-apple-gray-900 dark:text-apple-gray-50">Legal Diff</h1>
-              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">{user?.email}</p>
+              <p className="text-sm text-apple-gray-600 dark:text-apple-gray-400">Документы</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -105,9 +98,6 @@ export const DashboardPage = () => {
               title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
-            <Button variant="ghost" onClick={handleLogout} icon={<LogOut />}>
-              Выйти
             </Button>
           </div>
         </div>

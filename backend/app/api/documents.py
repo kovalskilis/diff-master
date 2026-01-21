@@ -6,9 +6,8 @@ import uuid
 from pydantic import BaseModel
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import BaseDocument, Article, Snapshot, AuditLog, AuditAction, ArticleVersion
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from schemas.document import BaseDocumentResponse, ArticleResponse, TaxUnitHierarchyResponse
 from services.audit_service import AuditService
 from services.parsing import parse_document_structure, parse_txt_structure, extract_edits_for_review
@@ -35,8 +34,7 @@ class ApprovedEditsResponse(BaseModel):
 @router.post("/import", response_model=BaseDocumentResponse)
 async def import_document(
     file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-2: Import base document (.docx or .txt)
@@ -59,9 +57,13 @@ async def import_document(
     elif source_type == "txt":
         structure = parse_txt_structure(content.decode('utf-8'))
     
+    # Ensure dummy user exists
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     # Create base document
     base_doc = BaseDocument(
-        user_id=user.id,
+        user_id=current_user_id,
         name=file.filename,
         source_type=source_type
     )
@@ -83,7 +85,7 @@ async def import_document(
     
     # Create initial snapshot
     snapshot = Snapshot(
-        user_id=user.id,
+        user_id=current_user_id,
         base_document_id=base_doc.id,
         comment="Initial import"
     )
@@ -112,7 +114,7 @@ async def import_document(
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.import_,
+        session, current_user_id, AuditAction.import_,
         entity_type="base_document",
         entity_id=base_doc.id,
         metadata={"filename": file.filename, "source_type": source_type}
@@ -136,12 +138,14 @@ async def import_document(
 
 @router.get("/documents", response_model=List[BaseDocumentResponse])
 async def list_documents(
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
-    """Get all documents for current user"""
+    """Get all documents"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
-        select(BaseDocument).where(BaseDocument.user_id == user.id)
+        select(BaseDocument).where(BaseDocument.user_id == current_user_id)
     )
     documents = result.scalars().all()
     
@@ -189,14 +193,16 @@ async def list_documents(
 @router.get("/documents/{document_id}", response_model=BaseDocumentResponse)
 async def get_document(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific document"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -231,15 +237,17 @@ async def get_document(
 @router.get("/documents/{document_id}/structure")
 async def get_document_structure(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get document structure (compatibility endpoint - returns empty for new structure)"""
-    # Verify document belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify document exists
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -253,15 +261,17 @@ async def get_document_structure(
 @router.get("/documents/{document_id}/articles", response_model=List[ArticleResponse])
 async def get_document_articles(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get all articles from document"""
-    # Verify document belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify document exists
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -279,8 +289,7 @@ async def get_document_articles(
 
 @router.post("/edits/extract")
 async def extract_edits_from_file(
-    file: UploadFile = File(...),
-    user: User = Depends(current_active_user)
+    file: UploadFile = File(...)
 ):
     """Extract edits from uploaded file for user review"""
     try:
@@ -310,16 +319,18 @@ async def extract_edits_from_file(
 @router.post("/edits/process", response_model=ApprovedEditsResponse)
 async def process_approved_edits(
     request: ApprovedEditsRequest,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Process approved edits and start Phase 1 analysis"""
     try:
-        # Verify document belongs to user
+        await ensure_dummy_user(session)
+        current_user_id = get_user_id()
+        
+        # Verify document exists
         result = await session.execute(
             select(BaseDocument).where(
                 BaseDocument.id == request.document_id,
-                BaseDocument.user_id == user.id
+                BaseDocument.user_id == current_user_id
             )
         )
         document = result.scalar_one_or_none()
@@ -331,7 +342,7 @@ async def process_approved_edits(
         
         # Start the task with approved edits
         task = phase1_find_targets_approved.delay(
-            user_id=str(user.id),
+            user_id=str(current_user_id),
             document_id=request.document_id,
             approved_articles=request.articles
         )
@@ -348,14 +359,16 @@ async def process_approved_edits(
 @router.delete("/documents/{document_id}")
 async def delete_document(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Delete document and all related data"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -447,7 +460,7 @@ async def delete_document(
     
     # Audit log after deletion
     await AuditService.log_action(
-        session, user.id, AuditAction.delete_,
+        session, current_user_id, AuditAction.delete_,
         entity_type="base_document",
         entity_id=document_id,
         metadata={"workspace_files_count": workspace_count}

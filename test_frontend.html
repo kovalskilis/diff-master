@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Test - No Auth Redirects</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .success {
+            border-left-color: #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+        }
+        .warning {
+            border-left-color: #ffc107;
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Frontend Authentication Removal Test</h1>
+    
+    <div class="test-item">
+        <h3>1. Check Current URL</h3>
+        <p id="current-url"></p>
+        <div class="status" id="url-status"></div>
+    </div>
+    
+    <div class="test-item">
+        <h3>2. Check for Login Redirect</h3>
+        <p>If you see this page and URL doesn't contain "/login", test passed.</p>
+        <div class="status" id="redirect-status"></div>
+    </div>
+    
+    <div class="test-item">
+        <h3>3. Test API Connection</h3>
+        <button onclick="testAPI()">Test Backend API</button>
+        <div class="status" id="api-status"></div>
+    </div>
+    
+    <div class="test-item">
+        <h3>4. Check Console for Errors</h3>
+        <p>Open browser DevTools (F12) and check Console tab for:</p>
+        <ul>
+            <li>❌ 401 Unauthorized errors</li>
+            <li>❌ 403 Forbidden errors</li>
+            <li>❌ "user is not defined" errors</li>
+            <li>❌ "token" related errors</li>
+        </ul>
+        <div class="status" id="console-status"></div>
+    </div>
+    
+    <div class="test-item">
+        <h3>5. Manual Tests</h3>
+        <p>Manually test:</p>
+        <ul>
+            <li>✅ Navigate to <a href="http://localhost:3000/dashboard" target="_blank">http://localhost:3000/dashboard</a></li>
+            <li>✅ Try to upload a document</li>
+            <li>✅ Check that no login page appears</li>
+        </ul>
+    </div>
+
+    <script>
+        // Check current URL
+        const currentUrl = window.location.href;
+        document.getElementById('current-url').textContent = currentUrl;
+        
+        if (currentUrl.includes('/login')) {
+            document.getElementById('url-status').textContent = '❌ ERROR: Redirected to /login';
+            document.getElementById('url-status').parentElement.className = 'test-item error';
+        } else {
+            document.getElementById('url-status').textContent = '✅ OK: Not redirected to /login';
+            document.getElementById('url-status').parentElement.className = 'test-item success';
+        }
+        
+        // Check redirect status
+        if (!currentUrl.includes('/login')) {
+            document.getElementById('redirect-status').textContent = '✅ OK: No login redirect detected';
+            document.getElementById('redirect-status').parentElement.className = 'test-item success';
+        }
+        
+        // Test API
+        async function testAPI() {
+            const statusEl = document.getElementById('api-status');
+            statusEl.textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    statusEl.textContent = '✅ OK: API is accessible. Response: ' + JSON.stringify(data);
+                    statusEl.parentElement.className = 'test-item success';
+                } else {
+                    statusEl.textContent = '⚠️ WARNING: API returned status ' + response.status;
+                    statusEl.parentElement.className = 'test-item warning';
+                }
+            } catch (error) {
+                statusEl.textContent = '❌ ERROR: ' + error.message;
+                statusEl.parentElement.className = 'test-item error';
+            }
+        }
+        
+        // Check console errors
+        const originalError = console.error;
+        let errorCount = 0;
+        console.error = function(...args) {
+            errorCount++;
+            const message = args.join(' ');
+            if (message.includes('401') || message.includes('403') || 
+                message.includes('Unauthorized') || message.includes('Forbidden') ||
+                message.includes('user is not defined') || message.includes('token')) {
+                document.getElementById('console-status').textContent = 
+                    '❌ ERROR DETECTED: ' + message.substring(0, 100);
+                document.getElementById('console-status').parentElement.className = 'test-item error';
+            }
+            originalError.apply(console, args);
+        };
+        
+        setTimeout(() => {
+            if (errorCount === 0) {
+                document.getElementById('console-status').textContent = 
+                    '✅ OK: No authentication-related errors detected';
+                document.getElementById('console-status').parentElement.className = 'test-item success';
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

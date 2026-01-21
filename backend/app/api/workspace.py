@@ -4,9 +4,8 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import WorkspaceFile, BaseDocument, AuditAction
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from schemas.document import WorkspaceFileResponse
 from services.audit_service import AuditService
 
@@ -25,18 +24,20 @@ async def upload_workspace_file(
     base_document_id: int = Form(...),
     file: Optional[UploadFile] = File(None),
     text_content: Optional[str] = Form(None),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-3: Upload edit file (.docx, .txt, or plain text)
     This only uploads the file, does not trigger LLM processing
     """
-    # Verify document belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify document exists
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == base_document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -44,7 +45,7 @@ async def upload_workspace_file(
         raise HTTPException(status_code=404, detail="Document not found")
     
     workspace_file = WorkspaceFile(
-        user_id=user.id,
+        user_id=current_user_id,
         base_document_id=base_document_id
     )
     
@@ -121,7 +122,7 @@ async def upload_workspace_file(
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.edit_upload,
+        session, current_user_id, AuditAction.edit_upload,
         entity_type="workspace_file",
         entity_id=workspace_file.id,
         metadata={"filename": workspace_file.filename}
@@ -136,11 +137,13 @@ async def upload_workspace_file(
 @router.get("/workspace/files", response_model=List[WorkspaceFileResponse])
 async def list_workspace_files(
     base_document_id: Optional[int] = None,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
-    """Get all workspace files for user"""
-    query = select(WorkspaceFile).where(WorkspaceFile.user_id == user.id)
+    """Get all workspace files"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    query = select(WorkspaceFile).where(WorkspaceFile.user_id == current_user_id)
     
     if base_document_id:
         query = query.where(WorkspaceFile.base_document_id == base_document_id)
@@ -153,14 +156,16 @@ async def list_workspace_files(
 @router.get("/workspace/file/{file_id}", response_model=WorkspaceFileResponse)
 async def get_workspace_file(
     file_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific workspace file"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == current_user_id
         )
     )
     file = result.scalar_one_or_none()
@@ -174,14 +179,16 @@ async def get_workspace_file(
 @router.delete("/workspace/file/{file_id}")
 async def delete_workspace_file(
     file_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Delete workspace file"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            WorkspaceFile.user_id == user.id
+            WorkspaceFile.user_id == current_user_id
         )
     )
     file = result.scalar_one_or_none()

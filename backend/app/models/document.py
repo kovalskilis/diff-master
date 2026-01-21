@@ -18,7 +18,6 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
-from models.user import User  # Import User model for foreign key references
 import enum
 import uuid
 
@@ -62,7 +61,7 @@ class BaseDocument(Base):
     __tablename__ = "base_document"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     name = Column(String(255), nullable=False)
     imported_at = Column(DateTime(timezone=True), server_default=func.now())
     source_type = Column(String(10))  # docx, txt
@@ -101,7 +100,7 @@ class Snapshot(Base):
     __tablename__ = "snapshot"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     base_document_id = Column(Integer, ForeignKey("base_document.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     comment = Column(Text)
@@ -156,7 +155,7 @@ class TaxUnitVersion(Base):
     snapshot_id = Column(Integer, ForeignKey("snapshot.id", ondelete="CASCADE"), nullable=False, index=True)
     text_content = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("user.id"), nullable=False)
+    created_by_user_id = Column(UUID(as_uuid=True), nullable=False)  # Removed ForeignKey - auth disabled
 
 
 class WorkspaceFile(Base):
@@ -164,7 +163,7 @@ class WorkspaceFile(Base):
     __tablename__ = "workspace_file"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     base_document_id = Column(Integer, ForeignKey("base_document.id"), nullable=True)
     source_type = Column(String(10))  # file, text
     filename = Column(String(255))
@@ -182,7 +181,7 @@ class EditTarget(Base):
     __tablename__ = "edit_target"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     workspace_file_id = Column(Integer, ForeignKey("workspace_file.id"), nullable=False, index=True)
     status = Column(Enum(EditJobStatus), default=EditJobStatus.pending, nullable=False)
     instruction_text = Column(Text, nullable=False)
@@ -200,7 +199,7 @@ class PatchedFragment(Base):
     __tablename__ = "patched_fragment"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     edit_target_id = Column(Integer, ForeignKey("edit_target.id"), nullable=False, index=True)
     article_id = Column(Integer, ForeignKey("article.id"), nullable=True, index=True)  # Temporary nullable during migration
     before_text = Column(Text)
@@ -218,7 +217,7 @@ class ExcelReport(Base):
     __tablename__ = "excel_report"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     snapshot_id = Column(Integer, ForeignKey("snapshot.id"), nullable=True)
     file_path = Column(String(512))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -232,7 +231,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Removed ForeignKey - auth disabled
     action = Column(Enum(AuditAction), nullable=False)
     entity_type = Column(String(50))
     entity_id = Column(Integer)

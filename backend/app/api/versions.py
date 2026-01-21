@@ -4,9 +4,8 @@ from sqlalchemy import select
 from typing import List
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import Snapshot, BaseDocument, PatchedFragment, Article, ArticleVersion, AuditAction, EditTarget
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from schemas.document import SnapshotResponse
 from services.audit_service import AuditService
 
@@ -23,17 +22,19 @@ router = APIRouter()
 @router.get("/versions", response_model=List[SnapshotResponse])
 async def list_versions(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-6: Get version history for document
     """
-    # Verify document belongs to user
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
+    # Verify document exists
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == current_user_id
         )
     )
     document = result.scalar_one_or_none()
@@ -55,19 +56,21 @@ async def list_versions(
 async def commit_version(
     workspace_file_id: int,
     comment: str = "",
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4 Stage 3: Commit version (create snapshot)
     Creates new snapshot with all patched fragments
     """
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     # Get all patched fragments for this workspace file
     # First get edit targets for this workspace file
     edit_targets_result = await session.execute(
         select(EditTarget).where(
             EditTarget.workspace_file_id == workspace_file_id,
-            EditTarget.user_id == user.id
+            EditTarget.user_id == current_user_id
         )
     )
     edit_targets = edit_targets_result.scalars().all()
@@ -107,7 +110,7 @@ async def commit_version(
     
     # Create new snapshot
     snapshot = Snapshot(
-        user_id=user.id,
+        user_id=current_user_id,
         base_document_id=document_id,
         comment=comment or f"Applied edits from workspace file {workspace_file_id}"
     )
@@ -139,7 +142,7 @@ async def commit_version(
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.commit,
+        session, current_user_id, AuditAction.commit,
         entity_type="snapshot",
         entity_id=snapshot.id,
         metadata={
@@ -161,14 +164,16 @@ async def commit_version(
 @router.get("/versions/{snapshot_id}", response_model=SnapshotResponse)
 async def get_version(
     snapshot_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific snapshot"""
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     result = await session.execute(
         select(Snapshot).where(
             Snapshot.id == snapshot_id,
-            Snapshot.user_id == user.id
+            Snapshot.user_id == current_user_id
         )
     )
     snapshot = result.scalar_one_or_none()

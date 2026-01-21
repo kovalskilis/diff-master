@@ -5,9 +5,8 @@ from typing import List, Optional
 import difflib
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import PatchedFragment, WorkspaceFile, Snapshot
+from utils.auth_utils import get_user_id, ensure_dummy_user
 from schemas.document import DiffResponse
 
 
@@ -24,13 +23,15 @@ router = APIRouter()
 async def get_diff(
     workspace_file_id: Optional[int] = Query(None),
     snapshot_id: Optional[int] = Query(None),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-5: Get diff between before/after texts
     Returns list of all changes with difflib-generated HTML diff
     """
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     fragments = []
     
     if workspace_file_id:
@@ -38,7 +39,7 @@ async def get_diff(
         result = await session.execute(
             select(WorkspaceFile).where(
                 WorkspaceFile.id == workspace_file_id,
-                WorkspaceFile.user_id == user.id
+                WorkspaceFile.user_id == current_user_id
             )
         )
         workspace_file = result.scalar_one_or_none()
@@ -53,7 +54,7 @@ async def get_diff(
         result = await session.execute(
             select(EditTarget.id).where(
                 EditTarget.workspace_file_id == workspace_file_id,
-                EditTarget.user_id == user.id
+                EditTarget.user_id == current_user_id
             )
         )
         target_ids = [row[0] for row in result]
@@ -64,7 +65,7 @@ async def get_diff(
         # Now get fragments for these targets
         result = await session.execute(
             select(PatchedFragment).where(
-                PatchedFragment.user_id == user.id,
+                PatchedFragment.user_id == current_user_id,
                 PatchedFragment.edit_target_id.in_(target_ids)
             )
         )
@@ -75,7 +76,7 @@ async def get_diff(
         result = await session.execute(
             select(Snapshot).where(
                 Snapshot.id == snapshot_id,
-                Snapshot.user_id == user.id
+                Snapshot.user_id == current_user_id
             )
         )
         snapshot = result.scalar_one_or_none()
@@ -85,7 +86,7 @@ async def get_diff(
         # Get all patched fragments for this snapshot
         result = await session.execute(
             select(PatchedFragment).where(
-                PatchedFragment.user_id == user.id
+                PatchedFragment.user_id == current_user_id
             )
         )
         fragments = result.scalars().fetchall()
@@ -145,25 +146,27 @@ async def get_diff(
 async def get_simple_diff(
     workspace_file_id: Optional[int] = Query(None),
     snapshot_id: Optional[int] = Query(None),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     Get simple unified diff (for text export)
     """
+    await ensure_dummy_user(session)
+    current_user_id = get_user_id()
+    
     fragments = []
     
     if workspace_file_id:
         result = await session.execute(
             select(PatchedFragment).where(
-                PatchedFragment.user_id == user.id
+                PatchedFragment.user_id == current_user_id
             )
         )
         fragments = result.scalars().fetchall()
     elif snapshot_id:
         result = await session.execute(
             select(PatchedFragment).where(
-                PatchedFragment.user_id == user.id
+                PatchedFragment.user_id == current_user_id
             )
         )
         fragments = result.scalars().fetchall()
