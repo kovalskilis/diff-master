@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -17,7 +17,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from database import get_async_session
 from models.document import WorkspaceFile, EditTarget, EditJobStatus, AuditAction, Article, PatchedFragment
-from utils.auth_utils import get_user_id, ensure_dummy_user
+import uuid
+DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 from schemas.edit import (
     EditTargetResponse, EditTargetUpdate, EditTargetCreate,
     Phase1Request, Phase1Response,
@@ -40,8 +41,8 @@ async def start_phase1(
     FR-4 Stage 1: Start "Find Targets" process
     LLM extracts edit instructions and finds matching tax_unit IDs
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify workspace file exists
     result = await session.execute(
@@ -84,8 +85,8 @@ async def get_edit_targets(
     FR-4.5: Get list of targets for review stage
     Returns all edit targets with their matched tax units
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify workspace file exists
     result = await session.execute(
@@ -164,8 +165,8 @@ async def create_edit_target(
     """
     Create a new edit target
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     print(f"[API] Creating target for workspace_file {create.workspace_file_id}, article_id {create.article_id}")
     
@@ -230,8 +231,8 @@ async def update_edit_target(
     FR-4.5: Update target's article_id
     Allows user to manually correct LLM's match
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     print(f"[API] Updating target {target_id} with article_id {update.article_id}")
     
@@ -317,8 +318,8 @@ async def delete_edit_target(
     """
     Delete an edit target
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     print(f"[API] Deleting target {target_id}")
     
@@ -349,8 +350,8 @@ async def start_phase2(
     FR-4 Stage 2: Start "Apply Edits" process
     Applies LLM transformations to confirmed targets
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify workspace file exists
     result = await session.execute(

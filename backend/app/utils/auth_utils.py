@@ -1,21 +1,24 @@
 """
-Authentication utilities for handling dummy user when auth is disabled.
-Since authentication is disabled, we only work with UUID values directly.
-No User model is needed - user_id columns are just UUID fields.
+Authentication utilities for handling dummy user when auth is disabled
 """
 import uuid
+import sys
+from pathlib import Path
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+# Add app directory to path for imports
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 # Fixed UUID for dummy user when auth is disabled
 DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
-async def ensure_dummy_user(session):
+async def ensure_dummy_user(session: AsyncSession) -> None:
     """
-    Placeholder function for compatibility.
-    Since auth is disabled and User table is removed, this function does nothing.
-    The dummy user ID is used directly in all operations.
+    Placeholder for dummy user creation.
+    With user table removed, this function is a no-op.
     """
-    # No-op: user table doesn't exist, we just use DUMMY_USER_ID directly
     pass
 
 

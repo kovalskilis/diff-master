@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+﻿from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
@@ -6,7 +6,8 @@ import io
 
 from database import get_async_session
 from models.document import PatchedFragment, Snapshot, ExcelReport, AuditAction
-from utils.auth_utils import get_user_id, ensure_dummy_user
+import uuid
+DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 from services.export_service import ExportService
 from services.audit_service import AuditService
 
@@ -29,8 +30,8 @@ async def export_text(
     """
     FR-8: Export texts in .txt or .docx format
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify snapshot exists
     result = await session.execute(
@@ -98,8 +99,8 @@ async def export_excel(
     FR-9: Generate Excel report with changes
     Columns: ДЕЙСТВУЮЩАЯ НОРМА НК РФ, НОВАЯ НОРМА, ИЗМЕНЯЕМАЯ/ВВОДИМАЯ НОРМА, ДАТА ВСТУПЛЕНИЯ, КОММЕНТАРИИ
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     if not snapshot_id and not workspace_file_id:
         raise HTTPException(

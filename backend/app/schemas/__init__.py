@@ -1,4 +1,4 @@
-# User schemas removed - authentication disabled
+﻿# User schemas removed - authentication disabled
 from .document import *
 from .edit import *
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Dict
@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from database import get_async_session
 from models.document import BaseDocument, Article, Snapshot, AuditLog, AuditAction, ArticleVersion
-from utils.auth_utils import get_user_id, ensure_dummy_user
+import uuid
+DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 from schemas.document import BaseDocumentResponse, ArticleResponse, TaxUnitHierarchyResponse
 from services.audit_service import AuditService
 from services.parsing import parse_document_structure, parse_txt_structure, extract_edits_for_review
@@ -58,8 +59,8 @@ async def import_document(
         structure = parse_txt_structure(content.decode('utf-8'))
     
     # Ensure dummy user exists
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Create base document
     base_doc = BaseDocument(
@@ -141,8 +142,8 @@ async def list_documents(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get all documents"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(BaseDocument).where(BaseDocument.user_id == current_user_id)
@@ -196,8 +197,8 @@ async def get_document(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific document"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(BaseDocument).where(
@@ -240,8 +241,8 @@ async def get_document_structure(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get document structure (compatibility endpoint - returns empty for new structure)"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify document exists
     result = await session.execute(
@@ -264,8 +265,8 @@ async def get_document_articles(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get all articles from document"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify document exists
     result = await session.execute(
@@ -323,8 +324,8 @@ async def process_approved_edits(
 ):
     """Process approved edits and start Phase 1 analysis"""
     try:
-        await ensure_dummy_user(session)
-        current_user_id = get_user_id()
+        
+        current_user_id = DUMMY_USER_ID
         
         # Verify document exists
         result = await session.execute(
@@ -362,8 +363,8 @@ async def delete_document(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Delete document and all related data"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(BaseDocument).where(

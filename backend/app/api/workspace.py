@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
+﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 
 from database import get_async_session
 from models.document import WorkspaceFile, BaseDocument, AuditAction
-from utils.auth_utils import get_user_id, ensure_dummy_user
+import uuid
+DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 from schemas.document import WorkspaceFileResponse
 from services.audit_service import AuditService
 
@@ -30,8 +31,8 @@ async def upload_workspace_file(
     FR-3: Upload edit file (.docx, .txt, or plain text)
     This only uploads the file, does not trigger LLM processing
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify document exists
     result = await session.execute(
@@ -140,8 +141,8 @@ async def list_workspace_files(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get all workspace files"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     query = select(WorkspaceFile).where(WorkspaceFile.user_id == current_user_id)
     
@@ -159,8 +160,8 @@ async def get_workspace_file(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific workspace file"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(WorkspaceFile).where(
@@ -182,8 +183,8 @@ async def delete_workspace_file(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Delete workspace file"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(WorkspaceFile).where(

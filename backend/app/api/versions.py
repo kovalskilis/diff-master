@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 
 from database import get_async_session
 from models.document import Snapshot, BaseDocument, PatchedFragment, Article, ArticleVersion, AuditAction, EditTarget
-from utils.auth_utils import get_user_id, ensure_dummy_user
+import uuid
+DUMMY_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 from schemas.document import SnapshotResponse
 from services.audit_service import AuditService
 
@@ -27,8 +28,8 @@ async def list_versions(
     """
     FR-6: Get version history for document
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Verify document exists
     result = await session.execute(
@@ -62,8 +63,8 @@ async def commit_version(
     FR-4 Stage 3: Commit version (create snapshot)
     Creates new snapshot with all patched fragments
     """
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     # Get all patched fragments for this workspace file
     # First get edit targets for this workspace file
@@ -167,8 +168,8 @@ async def get_version(
     session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific snapshot"""
-    await ensure_dummy_user(session)
-    current_user_id = get_user_id()
+    
+    current_user_id = DUMMY_USER_ID
     
     result = await session.execute(
         select(Snapshot).where(

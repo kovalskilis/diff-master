@@ -1,4 +1,4 @@
-# User model removed - authentication disabled
+﻿# User model removed - authentication disabled
 # from .document import (
 #     BaseDocument,
 #     TaxUnit,
