@@ -4,8 +4,6 @@ from sqlalchemy import select, text, func
 from typing import List
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import Article, ArticleVersion, BaseDocument
 from schemas.document import SearchResult
 
@@ -24,8 +22,7 @@ async def search_documents(
     q: str = Query(..., min_length=2),
     document_id: int = Query(None),
     limit: int = Query(20, le=100),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-7: Full-text search using PostgreSQL FTS
@@ -36,7 +33,7 @@ async def search_documents(
     
     # Build query with FTS
     base_query = select(Article).where(Article.base_document_id.in_(
-        select(BaseDocument.id).where(BaseDocument.user_id == user.id)
+        select(BaseDocument.id).where(BaseDocument.user_id == None)
     ))
     
     if document_id:
@@ -72,8 +69,7 @@ async def search_articles_simple(
     q: str = Query(..., min_length=1),
     document_id: int = Query(...),
     limit: int = Query(50, le=200),
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     Simple search for articles by title/article_number (for dropdown in Review Stage)
@@ -82,7 +78,7 @@ async def search_articles_simple(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -112,4 +108,5 @@ async def search_articles_simple(
         ))
     
     return search_results
+
 

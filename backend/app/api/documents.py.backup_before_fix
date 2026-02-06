@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Dict
@@ -30,7 +30,7 @@ class ApprovedEditsResponse(BaseModel):
     message: str
 
 
-@router.post("/import")
+@router.post("/import", response_model=BaseDocumentResponse)
 async def import_document(
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_async_session)
@@ -39,110 +39,105 @@ async def import_document(
     FR-2: Import base document (.docx or .txt)
     Parses document into hierarchical tax_unit structure
     """
-    try:
-        if not file.filename.endswith(('.docx', '.txt')):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only .docx and .txt files are supported"
-            )
-        
-        # Read file content
-        content = await file.read()
-        source_type = "docx" if file.filename.endswith('.docx') else "txt"
-        
-        # Parse document structure for articles
-        structure = None
-        if source_type == "docx":
-            structure = parse_document_structure(content)
-        elif source_type == "txt":
-            structure = parse_txt_structure(content.decode('utf-8'))
-        
-        # Create base document
-        base_doc = BaseDocument(
-            name=file.filename,
-            source_type=source_type
+    if not file.filename.endswith(('.docx', '.txt')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .docx and .txt files are supported"
         )
-        session.add(base_doc)
-        await session.flush()
-        
-        # Create Article records from structure
-        if structure:
-            for article_number, article_data in structure.items():
-                article = Article(
-                    base_document_id=base_doc.id,
-                    article_number=article_number,
-                    title=article_data.get('title'),
+    
+    # Read file content
+    content = await file.read()
+    source_type = "docx" if file.filename.endswith('.docx') else "txt"
+    
+    # Parse document structure for articles
+    structure = None
+    if source_type == "docx":
+        structure = parse_document_structure(content)
+    elif source_type == "txt":
+        structure = parse_txt_structure(content.decode('utf-8'))
+    
+    # Create base document
+    base_doc = BaseDocument(
+        user_id=None,
+        name=file.filename,
+        source_type=source_type
+    )
+    session.add(base_doc)
+    await session.flush()
+    
+    # Create Article records from structure
+    if structure:
+        for article_number, article_data in structure.items():
+            article = Article(
+                base_document_id=base_doc.id,
+                article_number=article_number,
+                title=article_data.get('title'),
+                content=article_data.get('content', '')
+            )
+            session.add(article)
+    
+    await session.flush()
+    
+    # Create initial snapshot
+    snapshot = Snapshot(
+        user_id=None,
+        base_document_id=base_doc.id,
+        comment="Initial import"
+    )
+    session.add(snapshot)
+    await session.flush()
+    
+    # Create versions for all articles
+    if structure:
+        for article_number, article_data in structure.items():
+            # Get article
+            result = await session.execute(
+                select(Article).where(
+                    Article.base_document_id == base_doc.id,
+                    Article.article_number == article_number
+                )
+            )
+            article = result.scalar_one_or_none()
+            
+            if article:
+                version = ArticleVersion(
+                    article_id=article.id,
+                    snapshot_id=snapshot.id,
                     content=article_data.get('content', '')
                 )
-                session.add(article)
-        
-        await session.flush()
-        
-        # Create initial snapshot
-        snapshot = Snapshot(
-            base_document_id=base_doc.id,
-            comment="Initial import"
-        )
-        session.add(snapshot)
-        await session.flush()
-        
-        # Create versions for all articles
-        if structure:
-            for article_number, article_data in structure.items():
-                # Get article
-                result = await session.execute(
-                    select(Article).where(
-                        Article.base_document_id == base_doc.id,
-                        Article.article_number == article_number
-                    )
-                )
-                article = result.scalar_one_or_none()
-                
-                if article:
-                    version = ArticleVersion(
-                        article_id=article.id,
-                        snapshot_id=snapshot.id,
-                        content=article_data.get('content', '')
-                    )
-                    session.add(version)
-        
-        # Audit log
-        await AuditService.log_action(
-            session, None, AuditAction.import_,
-            entity_type="base_document",
-            entity_id=base_doc.id,
-            metadata={"filename": file.filename, "source_type": source_type}
-        )
-        
-        await session.commit()
-        await session.refresh(base_doc)
-        
-        # Return document with structure for frontend compatibility
-        document_dict = {
-            "id": base_doc.id,
-            "name": base_doc.name,
-            "source_type": base_doc.source_type,
-            "imported_at": str(base_doc.imported_at) if base_doc.imported_at else None,
-            "structure": structure if structure else {}
-        }
-        
-        return document_dict
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        print(f"Import error: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+                session.add(version)
+    
+    # Audit log
+    await AuditService.log_action(
+        session, None, AuditAction.import_,
+        entity_type="base_document",
+        entity_id=base_doc.id,
+        metadata={"filename": file.filename, "source_type": source_type}
+    )
+    
+    await session.commit()
+    await session.refresh(base_doc)
+    
+    # Return document with structure for frontend compatibility
+    document_dict = {
+        "id": base_doc.id,
+        "name": base_doc.name,
+        "source_type": base_doc.source_type,
+        "imported_at": base_doc.imported_at,
+        "structure": structure if structure else {}
+    }
+    
+    
+    return document_dict
 
 
 @router.get("/documents", response_model=List[BaseDocumentResponse])
 async def list_documents(
     session: AsyncSession = Depends(get_async_session)
 ):
-    """Get all documents"""
+    """Get all documents for current user"""
     result = await session.execute(
-        select(BaseDocument)
+        select(BaseDocument).where(BaseDocument.user_id == None)
     )
     documents = result.scalars().all()
     
@@ -195,7 +190,8 @@ async def get_document(
     """Get specific document"""
     result = await session.execute(
         select(BaseDocument).where(
-            BaseDocument.id == document_id
+            BaseDocument.id == document_id,
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -236,7 +232,8 @@ async def get_document_structure(
     # Verify document belongs to user
     result = await session.execute(
         select(BaseDocument).where(
-            BaseDocument.id == document_id
+            BaseDocument.id == document_id,
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -256,7 +253,8 @@ async def get_document_articles(
     # Verify document belongs to user
     result = await session.execute(
         select(BaseDocument).where(
-            BaseDocument.id == document_id
+            BaseDocument.id == document_id,
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -311,7 +309,8 @@ async def process_approved_edits(
         # Verify document belongs to user
         result = await session.execute(
             select(BaseDocument).where(
-                BaseDocument.id == request.document_id
+                BaseDocument.id == request.document_id,
+                BaseDocument.user_id == None
             )
         )
         document = result.scalar_one_or_none()
@@ -345,7 +344,8 @@ async def delete_document(
     """Delete document and all related data"""
     result = await session.execute(
         select(BaseDocument).where(
-            BaseDocument.id == document_id
+            BaseDocument.id == document_id,
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -447,6 +447,5 @@ async def delete_document(
     print(f"[DELETE] Document {document_id} deleted successfully")
     
     return {"message": "Document deleted successfully"}
-
 
 

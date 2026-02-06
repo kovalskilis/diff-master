@@ -448,15 +448,14 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
     Uses LLM parsing for intelligent grouping of edits by articles
     """
     session = self.session
-    user_uuid = uuid.UUID(user_id)
+    user_uuid = uuid.UUID(user_id) if user_id else None
     
     try:
         print(f"[Phase1] Starting LLM-PARSING for workspace_file_id={workspace_file_id}, user_id={user_id}")
         
-        # Get workspace file
+        # Get workspace file - no user_id filter when auth is disabled
         workspace_file = session.query(WorkspaceFile).filter(
-            WorkspaceFile.id == workspace_file_id,
-            WorkspaceFile.user_id == user_uuid
+            WorkspaceFile.id == workspace_file_id
         ).first()
         
         if not workspace_file:
@@ -537,14 +536,12 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
             if article_id is not None:
                 existing_target = session.query(EditTarget).with_for_update().filter(
                     EditTarget.workspace_file_id == workspace_file_id,
-                    EditTarget.user_id == user_uuid,
                     EditTarget.article_id == article_id
                 ).first()
             else:
                 from sqlalchemy import text
                 existing_target = session.query(EditTarget).with_for_update().filter(
-                    EditTarget.workspace_file_id == workspace_file_id,
-                    EditTarget.user_id == user_uuid
+                    EditTarget.workspace_file_id == workspace_file_id
                 ).filter(
                     EditTarget.conflicts_json['article'].astext == article_num
                 ).first()
@@ -563,7 +560,6 @@ def phase1_find_targets(self, workspace_file_id: int, user_id: str):
             
             # Create edit target for this article
             edit_target = EditTarget(
-                user_id=user_uuid,
                 workspace_file_id=workspace_file_id,
                 status=target_status,
                 instruction_text=article_content,
@@ -617,14 +613,13 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
        - Create PatchedFragment with before/after
     """
     session = self.session
-    user_uuid = uuid.UUID(user_id)
+    user_uuid = uuid.UUID(user_id) if user_id else None
     
     try:
         # Get all edit targets for this workspace file
         # Include both pending (auto-confirmed) and review (manually confirmed) targets
         edit_targets = session.query(EditTarget).filter(
             EditTarget.workspace_file_id == workspace_file_id,
-            EditTarget.user_id == user_uuid,
             EditTarget.article_id.isnot(None),
             EditTarget.status.in_([EditJobStatus.pending, EditJobStatus.review])
         ).all()
@@ -685,7 +680,6 @@ def phase2_apply_edits(self, workspace_file_id: int, user_id: str):
             
             # Create PatchedFragment
             patched_fragment = PatchedFragment(
-                user_id=user_uuid,
                 edit_target_id=target.id,
                 article_id=article.id,
                 before_text=before_text,

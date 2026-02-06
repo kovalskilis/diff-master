@@ -4,8 +4,6 @@ from sqlalchemy import select
 from typing import List
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import Snapshot, BaseDocument, PatchedFragment, Article, ArticleVersion, AuditAction, EditTarget
 from schemas.document import SnapshotResponse
 from services.audit_service import AuditService
@@ -23,8 +21,7 @@ router = APIRouter()
 @router.get("/versions", response_model=List[SnapshotResponse])
 async def list_versions(
     document_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-6: Get version history for document
@@ -33,7 +30,7 @@ async def list_versions(
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == document_id,
-            BaseDocument.user_id == user.id
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -55,8 +52,7 @@ async def list_versions(
 async def commit_version(
     workspace_file_id: int,
     comment: str = "",
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-4 Stage 3: Commit version (create snapshot)
@@ -67,7 +63,7 @@ async def commit_version(
     edit_targets_result = await session.execute(
         select(EditTarget).where(
             EditTarget.workspace_file_id == workspace_file_id,
-            EditTarget.user_id == user.id
+            EditTarget.user_id == None
         )
     )
     edit_targets = edit_targets_result.scalars().all()
@@ -107,7 +103,7 @@ async def commit_version(
     
     # Create new snapshot
     snapshot = Snapshot(
-        user_id=user.id,
+        user_id=None,
         base_document_id=document_id,
         comment=comment or f"Applied edits from workspace file {workspace_file_id}"
     )
@@ -139,7 +135,7 @@ async def commit_version(
     
     # Audit log
     await AuditService.log_action(
-        session, user.id, AuditAction.commit,
+        session, None, AuditAction.commit,
         entity_type="snapshot",
         entity_id=snapshot.id,
         metadata={
@@ -161,14 +157,13 @@ async def commit_version(
 @router.get("/versions/{snapshot_id}", response_model=SnapshotResponse)
 async def get_version(
     snapshot_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get specific snapshot"""
     result = await session.execute(
         select(Snapshot).where(
             Snapshot.id == snapshot_id,
-            Snapshot.user_id == user.id
+            Snapshot.user_id == None
         )
     )
     snapshot = result.scalar_one_or_none()
@@ -177,4 +172,5 @@ async def get_version(
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
     return snapshot
+
 

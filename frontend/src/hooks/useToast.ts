@@ -1,44 +1,43 @@
 import { useState, useCallback } from 'react';
-import type { Toast } from '@/components/ui/Toast';
+import type { Toast, ToastType } from '@/components/ui/Toast';
+
+let toastCounter = 0;
 
 export const useToast = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { ...toast, id }]);
-  }, []);
-
   const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const success = useCallback((title: string, message?: string) => {
-    addToast({ type: 'success', title, message });
+  const addToast = useCallback((type: ToastType, title: string, message?: string, duration?: number) => {
+    const id = String(++toastCounter);
+    setToasts((prev) => [...prev, { id, type, title, message, duration }]);
+  }, []);
+
+  const success = useCallback((title: string, message?: string, duration?: number) => {
+    addToast('success', title, message, duration);
   }, [addToast]);
 
-  const error = useCallback((title: string, message?: string) => {
-    addToast({ type: 'error', title, message });
+  const error = useCallback((title: string, message?: string, duration?: number) => {
+    addToast('error', title, message, duration);
   }, [addToast]);
 
-  const warning = useCallback((title: string, message?: string) => {
-    addToast({ type: 'warning', title, message });
+  const warning = useCallback((title: string, message?: string, duration?: number) => {
+    addToast('warning', title, message, duration);
   }, [addToast]);
 
-  const info = useCallback((title: string, message?: string) => {
-    addToast({ type: 'info', title, message });
+  const info = useCallback((title: string, message?: string, duration?: number) => {
+    addToast('info', title, message, duration);
   }, [addToast]);
 
   return {
     toasts,
-    addToast,
     removeToast,
+    addToast,
     success,
     error,
     warning,
     info,
   };
 };
-
-
-

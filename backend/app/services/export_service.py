@@ -10,7 +10,7 @@ import asyncio
 import re
 
 from models.document import (
-    Snapshot, ArticleVersion, PatchedFragment, TaxUnit, Article
+    Snapshot, ArticleVersion, PatchedFragment, TaxUnit, Article, EditTarget
 )
 from services.llm_service import LLMService
 
@@ -139,8 +139,23 @@ class ExportService:
         
         # Get patched fragments
         query = select(PatchedFragment)
-        if user_id:
-            query = query.where(PatchedFragment.user_id == user_id)
+        
+        if workspace_file_id:
+            # Filter by workspace_file_id through edit_targets
+            target_ids_result = await self.session.execute(
+                select(EditTarget.id).where(
+                    EditTarget.workspace_file_id == workspace_file_id
+                )
+            )
+            target_ids = [row[0] for row in target_ids_result]
+            if target_ids:
+                query = query.where(PatchedFragment.edit_target_id.in_(target_ids))
+            else:
+                # No targets found - return empty Excel
+                buffer = io.BytesIO()
+                wb.save(buffer)
+                buffer.seek(0)
+                return buffer.getvalue()
         
         result = await self.session.execute(query)
         fragments = result.scalars().all()

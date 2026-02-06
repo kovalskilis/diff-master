@@ -1,40 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Theme = 'light' | 'dark';
-
 interface ThemeState {
-  theme: Theme;
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
   toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
       theme: 'light',
-      toggleTheme: () => {
-        set((state) => {
-          const newTheme = state.theme === 'light' ? 'dark' : 'light';
-          // Apply theme to HTML element
-          document.documentElement.classList.toggle('dark', newTheme === 'dark');
-          return { theme: newTheme };
-        });
-      },
-      setTheme: (theme) => {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-        set({ theme });
-      },
+      setTheme: (theme) => set({ theme }),
+      toggleTheme: () => set((state) => ({ 
+        theme: state.theme === 'light' ? 'dark' : 'light' 
+      })),
     }),
     {
       name: 'theme-storage',
-      onRehydrateStorage: () => (state) => {
-        // Apply theme on mount
-        if (state) {
-          document.documentElement.classList.toggle('dark', state.theme === 'dark');
-        }
-      },
     }
   )
 );
-

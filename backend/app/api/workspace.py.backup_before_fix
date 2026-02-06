@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
@@ -29,11 +29,11 @@ async def upload_workspace_file(
     FR-3: Upload edit file (.docx, .txt, or plain text)
     This only uploads the file, does not trigger LLM processing
     """
-    # Verify document exists
+    # Verify document belongs to user
     result = await session.execute(
         select(BaseDocument).where(
             BaseDocument.id == base_document_id,
-            
+            BaseDocument.user_id == None
         )
     )
     document = result.scalar_one_or_none()
@@ -41,7 +41,7 @@ async def upload_workspace_file(
         raise HTTPException(status_code=404, detail="Document not found")
     
     workspace_file = WorkspaceFile(
-        
+        user_id=None,
         base_document_id=base_document_id
     )
     
@@ -67,7 +67,7 @@ async def upload_workspace_file(
                 else:
                     raise HTTPException(
                         status_code=400, 
-                        detail="РќРµ СѓРґР°Р»РѕСЃСЊ РґРµРєРѕРґРёСЂРѕРІР°С‚СЊ С‚РµРєСЃС‚РѕРІС‹Р№ С„Р°Р№Р». РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СЃРѕС…СЂР°РЅРёС‚Рµ С„Р°Р№Р» РІ РєРѕРґРёСЂРѕРІРєРµ UTF-8."
+                        detail="Не удалось декодировать текстовый файл. Пожалуйста, сохраните файл в кодировке UTF-8."
                     )
         elif file.filename and file.filename.lower().endswith('.docx'):
             # DOCX file - extract text
@@ -79,7 +79,7 @@ async def upload_workspace_file(
             except Exception as e:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±СЂР°Р±РѕС‚Р°С‚СЊ С„Р°Р№Р» .docx: {str(e)}. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РєРѕРЅРІРµСЂС‚РёСЂСѓР№С‚Рµ С„Р°Р№Р» РІ С‚РµРєСЃС‚РѕРІС‹Р№ С„РѕСЂРјР°С‚ (.txt)."
+                    detail=f"Не удалось обработать файл .docx: {str(e)}. Пожалуйста, конвертируйте файл в текстовый формат (.txt)."
                 )
         else:
             # File without extension or with unknown extension
@@ -87,7 +87,7 @@ async def upload_workspace_file(
             if b'[Content_Types].xml' in content or b'word/' in content or b'PK' in content[:4]:
                 raise HTTPException(
                     status_code=400,
-                    detail="РћР±РЅР°СЂСѓР¶РµРЅ С„Р°Р№Р» .docx. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РєРѕРЅРІРµСЂС‚РёСЂСѓР№С‚Рµ РµРіРѕ РІ С‚РµРєСЃС‚РѕРІС‹Р№ С„РѕСЂРјР°С‚ (.txt) РїРµСЂРµРґ Р·Р°РіСЂСѓР·РєРѕР№."
+                    detail="Обнаружен файл .docx. Пожалуйста, конвертируйте его в текстовый формат (.txt) перед загрузкой."
                 )
             else:
                 # Try to treat as text
@@ -104,7 +104,7 @@ async def upload_workspace_file(
                     else:
                         raise HTTPException(
                             status_code=400,
-                            detail="РќРµРїРѕРґРґРµСЂР¶РёРІР°РµРјС‹Р№ С„РѕСЂРјР°С‚ С„Р°Р№Р»Р°. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, Р·Р°РіСЂСѓР·РёС‚Рµ С‚РµРєСЃС‚РѕРІС‹Р№ С„Р°Р№Р» (.txt) СЃ РїСЂР°РІРєР°РјРё."
+                            detail="Неподдерживаемый формат файла. Пожалуйста, загрузите текстовый файл (.txt) с правками."
                         )
     elif text_content:
         # Plain text
@@ -135,8 +135,8 @@ async def list_workspace_files(
     base_document_id: Optional[int] = None,
     session: AsyncSession = Depends(get_async_session)
 ):
-    """Get all workspace files"""
-    query = select(WorkspaceFile).where()
+    """Get all workspace files for user"""
+    query = select(WorkspaceFile).where(WorkspaceFile.user_id == None)
     
     if base_document_id:
         query = query.where(WorkspaceFile.base_document_id == base_document_id)
@@ -155,7 +155,7 @@ async def get_workspace_file(
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            
+            WorkspaceFile.user_id == None
         )
     )
     file = result.scalar_one_or_none()
@@ -175,7 +175,7 @@ async def delete_workspace_file(
     result = await session.execute(
         select(WorkspaceFile).where(
             WorkspaceFile.id == file_id,
-            
+            WorkspaceFile.user_id == None
         )
     )
     file = result.scalar_one_or_none()
@@ -187,6 +187,5 @@ async def delete_workspace_file(
     await session.commit()
     
     return {"message": "File deleted successfully"}
-
 
 

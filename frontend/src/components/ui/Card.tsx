@@ -10,11 +10,12 @@ interface CardProps {
 }
 
 export const Card = ({ children, className, hover = false, onClick }: CardProps) => {
-  const Component = onClick ? motion.button : motion.div;
-  
   return (
-    <Component
+    <motion.div
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
       className={cn(
         'card-apple',
         hover && 'cursor-pointer',
@@ -25,7 +26,7 @@ export const Card = ({ children, className, hover = false, onClick }: CardProps)
       transition={{ duration: 0.2 }}
     >
       {children}
-    </Component>
+    </motion.div>
   );
 };
 

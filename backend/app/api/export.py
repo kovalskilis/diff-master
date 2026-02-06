@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
 import io
 
 from database import get_async_session
-from auth import current_active_user
-from models.user import User
 from models.document import PatchedFragment, Snapshot, ExcelReport, AuditAction
 from services.export_service import ExportService
 from services.audit_service import AuditService
@@ -25,17 +23,15 @@ router = APIRouter()
 async def export_text(
     snapshot_id: int,
     format: str = "txt",  # txt or docx
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-8: Export texts in .txt or .docx format
     """
-    # Verify snapshot belongs to user
+    # Verify snapshot exists
     result = await session.execute(
         select(Snapshot).where(
-            Snapshot.id == snapshot_id,
-            Snapshot.user_id == user.id
+            Snapshot.id == snapshot_id
         )
     )
     snapshot = result.scalar_one_or_none()
@@ -52,7 +48,7 @@ async def export_text(
         
         # Audit log
         await AuditService.log_action(
-            session, user.id, AuditAction.export_txt,
+            session, None, AuditAction.export_txt,
             entity_type="snapshot",
             entity_id=snapshot_id,
             metadata={"format": "txt"}
@@ -71,7 +67,7 @@ async def export_text(
         
         # Audit log
         await AuditService.log_action(
-            session, user.id, AuditAction.export_txt,
+            session, None, AuditAction.export_txt,
             entity_type="snapshot",
             entity_id=snapshot_id,
             metadata={"format": "docx"}
@@ -89,10 +85,9 @@ async def export_text(
 
 @router.post("/export/excel")
 async def export_excel(
-    snapshot_id: Optional[int] = None,
-    workspace_file_id: Optional[int] = None,
-    session: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user)
+    snapshot_id: Optional[int] = Query(None),
+    workspace_file_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_async_session)
 ):
     """
     FR-9: Generate Excel report with changes
@@ -110,25 +105,28 @@ async def export_excel(
     excel_bytes = await export_service.export_as_excel(
         snapshot_id=snapshot_id,
         workspace_file_id=workspace_file_id,
-        user_id=user.id
+        user_id=None
     )
     
-    # Save report record
-    excel_report = ExcelReport(
-        user_id=user.id,
-        snapshot_id=snapshot_id,
-        file_path=f"report_{snapshot_id or workspace_file_id}.xlsx"
-    )
-    session.add(excel_report)
-    
-    # Audit log
-    await AuditService.log_action(
-        session, user.id, AuditAction.export_excel,
-        entity_type="snapshot" if snapshot_id else "workspace_file",
-        entity_id=snapshot_id or workspace_file_id,
-        metadata={"report_id": excel_report.id}
-    )
-    await session.commit()
+    # Save report record and audit log (non-critical, don't block export)
+    try:
+        excel_report = ExcelReport(
+            snapshot_id=snapshot_id,
+            file_path=f"report_{snapshot_id or workspace_file_id}.xlsx"
+        )
+        session.add(excel_report)
+        await session.flush()
+        
+        await AuditService.log_action(
+            session, None, AuditAction.export_excel,
+            entity_type="snapshot" if snapshot_id else "workspace_file",
+            entity_id=snapshot_id or workspace_file_id,
+            metadata={"report_id": excel_report.id}
+        )
+        await session.commit()
+    except Exception as e:
+        print(f"[Export] Warning: Failed to save report record: {e}")
+        await session.rollback()
     
     return Response(
         content=excel_bytes,
@@ -137,4 +135,5 @@ async def export_excel(
             "Content-Disposition": f"attachment; filename=changes_report_{snapshot_id or workspace_file_id}.xlsx"
         }
     )
+
 

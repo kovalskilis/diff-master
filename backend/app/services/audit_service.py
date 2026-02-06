@@ -8,19 +8,18 @@ class AuditService:
     @staticmethod
     async def log_action(
         session: AsyncSession,
-        user_id: uuid.UUID,
+        user_id: Optional[uuid.UUID],
         action: AuditAction,
         entity_type: Optional[str] = None,
         entity_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None
     ):
-        """Log user action to audit log"""
+        """Log action to audit log (user_id is optional since auth is removed)"""
         audit_entry = AuditLog(
-            user_id=user_id,
             action=action,
             entity_type=entity_type,
             entity_id=entity_id,
-            metadata=metadata or {}
+            metadata_json=metadata or {}
         )
         session.add(audit_entry)
         return audit_entry

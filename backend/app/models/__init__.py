@@ -1,26 +1,40 @@
-# from .user import User
-# from .document import (
-#     BaseDocument,
-#     TaxUnit,
-#     TaxUnitVersion,
-#     Snapshot,
-#     WorkspaceFile,
-#     EditTarget,
-#     PatchedFragment,
-#     ExcelReport,
-#     AuditLog,
-# )
+﻿# Models package
+from app.database import Base
+
+# Import all models from document.py
+from .document import (
+    BaseDocument,
+    Article,
+    Snapshot,
+    ArticleVersion,
+    WorkspaceFile,
+    EditTarget,
+    PatchedFragment,
+    ExcelReport,
+    AuditLog,
+    TaxUnit,
+    TaxUnitVersion,
+    TaxUnitType,
+    EditJobStatus,
+    ChangeType,
+    AuditAction
+)
 
 __all__ = [
-    "User",
+    "Base",
     "BaseDocument",
-    "TaxUnit",
-    "TaxUnitVersion",
+    "Article", 
     "Snapshot",
+    "ArticleVersion",
     "WorkspaceFile",
     "EditTarget",
     "PatchedFragment",
     "ExcelReport",
     "AuditLog",
+    "TaxUnit",
+    "TaxUnitVersion",
+    "TaxUnitType",
+    "EditJobStatus",
+    "ChangeType",
+    "AuditAction"
 ]
-

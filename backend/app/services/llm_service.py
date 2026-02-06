@@ -35,19 +35,21 @@ class LLMService:
                 temperature=0,
                 openai_api_key=settings.DEEPSEEK_API_KEY,
                 openai_api_base=settings.DEEPSEEK_BASE_URL,
-                request_timeout=180,  # increased timeout to handle long edits
-                max_retries=1  # Only 1 retry
+                request_timeout=300,  # increased timeout to handle long edits
+                max_retries=2,
+                max_tokens=16000  # Allow long responses for large articles
             )
-            print(f"[LLM] Initialized DeepSeek with model={settings.LLM_MODEL}")
+            print(f"[LLM] Initialized DeepSeek with model={settings.LLM_MODEL}, max_tokens=16000")
         else:
             self.llm = ChatOpenAI(
                 model=settings.LLM_MODEL,
                 temperature=0,
                 openai_api_key=settings.OPENAI_API_KEY,
-                request_timeout=180,  # increased timeout to handle long edits
-                max_retries=1  # Only 1 retry
+                request_timeout=300,  # increased timeout to handle long edits
+                max_retries=2,
+                max_tokens=16000  # Allow long responses for large articles
             )
-            print(f"[LLM] Initialized OpenAI with model={settings.LLM_MODEL}")
+            print(f"[LLM] Initialized OpenAI with model={settings.LLM_MODEL}, max_tokens=16000")
     
     async def extract_edit_instructions(self, edits_text: str) -> List[Dict[str, Any]]:
         """
@@ -130,33 +132,48 @@ class LLMService:
         """
         FR-4 Phase 2: Apply edit instruction to text fragment
         
+        Uses a diff-based approach: LLM returns only find/replace pairs,
+        then changes are applied programmatically to preserve full text.
+        This avoids output token limits for large articles.
+        
         Input:
         - before_text: Оригинальный текст статьи/пункта
-        - instruction: Инструкция правки (например: "а) слова 'рабочий день' дополнить словами 'календарный день'")
+        - instruction: Инструкция правки
         
         Output: Измененный текст (after_text)
         """
         prompt = ChatPromptTemplate.from_messages([
             ("system", """Ты - эксперт редактор юридических документов.
 
-Твоя задача: применить правку к тексту согласно инструкции.
+Твоя задача: определить КОНКРЕТНЫЕ замены в тексте согласно инструкции.
 
-ВАЖНО:
-- Применяй правку ТОЧНО как указано в инструкции
-- Сохраняй форматирование и структуру текста
-- Если инструкция говорит "слова ... заменить словами ...", найди эти слова и замени
-- Если "дополнить словами", добавь слова в нужное место
-- Если "исключить слова", удали их
-- Если правку невозможно применить (текст не найден), верни исходный текст и укажи в начале: [ОШИБКА: текст не найден]
+Верни результат СТРОГО в формате JSON-массива замен:
+```json
+[
+  {{"find": "точная строка из оригинала которую нужно заменить", "replace": "новая строка на замену"}},
+  {{"find": "другая строка для замены", "replace": "её замена"}}
+]
+```
 
-Верни ТОЛЬКО измененный текст, без комментариев."""),
+ПРАВИЛА:
+- "find" должен содержать ТОЧНУЮ подстроку из оригинального текста (включая пробелы и переносы)
+- "replace" — то, на что нужно заменить
+- Для ДОБАВЛЕНИЯ текста: find = фрагмент ПЕРЕД местом вставки, replace = тот же фрагмент + новый текст
+- Для УДАЛЕНИЯ текста: find = удаляемый фрагмент, replace = ""
+- Для ЗАМЕНЫ: find = старый текст, replace = новый текст
+- Делай find достаточно длинным (20-60 символов) чтобы однозначно идентифицировать место
+- НИКОГДА не используй многоточие "..." или "…" для сокращения текста в find или replace
+- В "replace" указывай ПОЛНЫЙ текст замены, включая все ссылки на законы, номера, даты — ничего не пропускай и не сокращай
+- Если в инструкции указано дополнить текст, в "replace" включи ВЕСЬ оригинальный фрагмент из "find" + добавленный текст целиком
+- Если правку невозможно применить, верни: [{{"find": "", "replace": "", "error": "описание ошибки"}}]
+- Верни ТОЛЬКО JSON, без комментариев"""),
             ("user", """Оригинальный текст:
 {before_text}
 
 Инструкция правки:
 {instruction}
 
-Примени правку и верни измененный текст:""")
+Определи конкретные замены (JSON):""")
         ])
         
         chain = prompt | self.llm
@@ -165,8 +182,69 @@ class LLMService:
             "instruction": instruction
         })
         
-        after_text = response.content.strip()
-        return after_text
+        response_text = response.content.strip()
+        
+        # Parse JSON replacements
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in response_text:
+                match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+                if match:
+                    response_text = match.group(1)
+            elif "```" in response_text:
+                match = re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL)
+                if match:
+                    response_text = match.group(1)
+            
+            replacements = json.loads(response_text)
+            
+            if not isinstance(replacements, list):
+                print(f"[LLM] Unexpected response format, not a list")
+                return before_text
+            
+            # Check for error
+            if len(replacements) == 1 and replacements[0].get("error"):
+                print(f"[LLM] Edit error: {replacements[0]['error']}")
+                return f"[ОШИБКА: {replacements[0]['error']}]\n{before_text}"
+            
+            # Apply replacements to original text
+            after_text = before_text
+            applied = 0
+            failed = 0
+            
+            for i, rep in enumerate(replacements):
+                find_str = rep.get("find", "")
+                replace_str = rep.get("replace", "")
+                
+                if not find_str:
+                    continue
+                
+                if find_str in after_text:
+                    after_text = after_text.replace(find_str, replace_str, 1)
+                    applied += 1
+                    print(f"[LLM] Applied replacement {i+1}: '{find_str[:50]}...' -> '{replace_str[:50]}...'")
+                else:
+                    failed += 1
+                    print(f"[LLM] WARNING: Could not find text for replacement {i+1}: '{find_str[:80]}...'")
+            
+            print(f"[LLM] Replacements: {applied} applied, {failed} failed out of {len(replacements)}")
+            
+            if applied == 0 and len(replacements) > 0:
+                return f"[ОШИБКА: не удалось применить замены]\n{before_text}"
+            
+            return after_text
+            
+        except json.JSONDecodeError as e:
+            print(f"[LLM] Failed to parse JSON replacements: {e}")
+            print(f"[LLM] Raw response: {response_text[:500]}")
+            # Fallback: if response looks like full text (not JSON), use it directly
+            if not response_text.startswith('[') and len(response_text) > 100:
+                print(f"[LLM] Using raw response as full text fallback")
+                return response_text
+            return before_text
+        except Exception as e:
+            print(f"[LLM] Error applying replacements: {e}")
+            return before_text
     
     async def match_address_to_breadcrumbs(
         self, 
