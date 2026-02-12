@@ -13,7 +13,9 @@ import type {
 } from '@/types';
 
 // Single source of truth for API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Empty string = relative paths, works through nginx proxy in Docker
+// and through vite proxy in local dev
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

@@ -33,15 +33,8 @@ export const ReviewPage = () => {
 
   useEffect(() => {
     if (!workspaceFileId) return;
-    const params = new URLSearchParams(window.location.search);
-    const taskId = params.get('task');
-    if (taskId) {
-      // Запущено из DocumentPage – просто ждём завершения
-      pollTaskStatus(taskId);
-    } else {
-      // Стартуем здесь, только если не пришёл taskId
-      checkAndStartPhase1();
-    }
+    // Always check for existing targets first (handles page refresh after docker restart)
+    checkAndStartPhase1();
   }, [workspaceFileId]);
 
   const checkAndStartPhase1 = async () => {
@@ -53,13 +46,19 @@ export const ReviewPage = () => {
         // Targets already exist, just load them
         setTargets(existingTargets);
         setIsLoading(false);
-      } else {
-        // No targets exist, start Phase 1
-        startPhase1();
+        return;
       }
     } catch (error) {
       console.error('Failed to check targets:', error);
-      // If error getting targets, try starting Phase1 anyway
+    }
+
+    // No existing targets found — check if we have a task ID from navigation
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('task');
+    if (taskId) {
+      pollTaskStatus(taskId);
+    } else {
+      // No task ID either, start Phase 1
       startPhase1();
     }
   };
@@ -75,7 +74,10 @@ export const ReviewPage = () => {
   };
 
   const pollTaskStatus = async (taskId: string) => {
+    let pollCount = 0;
+    const maxPolls = 150; // 150 * 2s = 5 minutes max wait
     const interval = setInterval(async () => {
+      pollCount++;
       try {
         const status = await editsAPI.getTaskStatus(taskId);
         setTaskStatus(status.status);
@@ -87,6 +89,12 @@ export const ReviewPage = () => {
           clearInterval(interval);
           alert('Ошибка обработки: ' + (status.error || 'Неизвестная ошибка'));
           setIsLoading(false);
+        } else if (pollCount >= maxPolls) {
+          // Timeout — task stuck at PENDING (likely stale task ID after restart)
+          clearInterval(interval);
+          console.warn('Task polling timeout, task may be stale:', taskId);
+          setIsLoading(false);
+          setTaskStatus('TIMEOUT');
         }
       } catch (error) {
         clearInterval(interval);
@@ -227,6 +235,25 @@ export const ReviewPage = () => {
     }
   };
   
+  if (taskStatus === 'TIMEOUT') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">
+        <AlertCircle className="w-16 h-16 text-yellow-500 mb-4" />
+        <p className="text-apple-gray-700 dark:text-apple-gray-300 font-medium mb-4">
+          Задача не отвечает (возможно, сервер был перезапущен)
+        </p>
+        <div className="flex gap-3">
+          <Button variant="primary" onClick={() => { setTaskStatus(''); setIsLoading(true); startPhase1(); }}>
+            Запустить заново
+          </Button>
+          <Button variant="ghost" icon={<ArrowLeft />} onClick={() => navigate(-1)}>
+            Назад
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-apple-gray-50 to-white dark:from-apple-gray-900 dark:to-apple-gray-800">

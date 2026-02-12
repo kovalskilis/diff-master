@@ -19,75 +19,92 @@ Full-stack приложение для интеллектуальной обра
 - Docker и Docker Compose
 - DeepSeek API ключ (или OpenAI API ключ)
 
-### Установка
+### Установка и запуск (Docker - Рекомендуется)
 
 1. **Клонируйте репозиторий**
 ```bash
 git clone <repository-url>
-cd diff-master
+cd diff-master2
 ```
 
-2. **Создайте .env файл в корне проекта**
-```bash
-touch .env
-```
-
-Добавьте в `.env`:
+2. **Создайте файл `backend/.env`** с настройками:
 ```env
-OPENAI_API_KEY=sk-your-deepseek-key-here
-SECRET_KEY=your-very-strong-secret-key
+DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/0
+SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
+OPENAI_API_KEY=sk-your-openai-key-here
+DEEPSEEK_API_KEY=sk-your-deepseek-key-here
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
 ```
 
-3. **Запустите инфраструктуру**
+3. **Запустите проект одной командой:**
+
+**Windows (PowerShell):**
+```powershell
+.\start.ps1
+```
+
+**Linux/Mac:**
+```bash
+docker-compose up -d --build
+```
+
+4. **Откройте приложение**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+**Полезные команды:**
+```bash
+# Просмотр логов
+docker-compose logs -f
+
+# Остановка проекта
+docker-compose down
+
+# Перезапуск
+docker-compose restart
+```
+
+### Локальная разработка (без Docker)
+
+Если вы хотите запускать сервисы локально без Docker:
+
+1. **Запустите инфраструктуру (PostgreSQL и Redis)**
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Это запустит PostgreSQL и Redis в Docker.
-
-4. **Настройте Backend**
-
-Создайте `backend/.env`:
-```bash
-cat > backend/.env << 'EOF'
+2. **Настройте Backend** - создайте `backend/.env`:
+```env
 DATABASE_URL=postgresql://legal_diff_user:dev123@localhost:5432/legal_diff
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/0
 SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
-OPENAI_API_KEY=sk-your-deepseek-key-here
-DEEPSEEK_API_KEY=
+DEEPSEEK_API_KEY=sk-your-deepseek-key-here
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-EOF
+LLM_MODEL=deepseek-chat
 ```
 
-5. **Запустите Backend**
-
-В терминале 1:
+3. **Запустите Backend** (терминал 1):
 ```bash
 cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-В терминале 2 (Celery):
+4. **Запустите Celery Worker** (терминал 2):
 ```bash
 cd backend
-source venv/bin/activate
 celery -A app.worker.celery_app worker --loglevel=info
 ```
 
-6. **Запустите Frontend**
-
-В терминале 3:
+5. **Запустите Frontend** (терминал 3):
 ```bash
 cd frontend
 npm run dev
 ```
-
-7. **Откройте приложение**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
 
 ## 📖 Основное использование
 

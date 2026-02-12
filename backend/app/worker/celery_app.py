@@ -2,23 +2,15 @@ import sys
 import os
 from pathlib import Path
 
-# Explicitly load .env file BEFORE any imports
-from dotenv import load_dotenv
-env_path = Path(__file__).resolve().parents[2] / ".env"
-
-# Debug: read and print .env content
-print(f"[Celery] .env path: {env_path}")
-print(f"[Celery] .env exists: {env_path.exists()}")
-if env_path.exists():
-    with open(env_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-        print(f"[Celery] .env content preview:")
-        for line in content.split('\n')[:10]:
-            if 'KEY' in line or 'DEEPSEEK' in line:
-                print(f"  {line[:50]}...")
-
-load_dotenv(env_path, override=True)
-print(f"[Celery] DEEPSEEK_API_KEY from env: {os.getenv('DEEPSEEK_API_KEY', 'NOT FOUND')[:20]}...")
+# Only load .env file if NOT running inside Docker (DISABLE_DOTENV != 1)
+if os.getenv("DISABLE_DOTENV") != "1":
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    print(f"[Celery] Loading .env from: {env_path}")
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+else:
+    print("[Celery] DISABLE_DOTENV=1, using Docker environment variables")
 
 from celery import Celery
 

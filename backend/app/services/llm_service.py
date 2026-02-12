@@ -7,15 +7,23 @@ import os
 from pathlib import Path
 
 # Load environment variables
-from dotenv import load_dotenv
-
 import sys
 from pathlib import Path
 
 # Add app directory to path for imports
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-load_dotenv("/home/kit/Desktop/Lizon/diff-master/backend/.env")
+# Only load .env file if NOT running inside Docker
+if os.getenv("DISABLE_DOTENV") != "1":
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"[LLM] Loaded .env from: {env_path}")
+    else:
+        print(f"[LLM] .env not found at {env_path}, using OS environment")
+else:
+    print("[LLM] DISABLE_DOTENV=1, using Docker environment variables")
 
 # Import settings after loading env
 from config import settings

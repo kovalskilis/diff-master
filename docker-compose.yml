@@ -8,26 +8,15 @@ services:
       dockerfile: Dockerfile
     command: uvicorn app.app:app --host 0.0.0.0 --port 8000 --reload
     env_file:
-      - ./.env
-    volumes:
-      - ./backend:/app
+      - ./backend/.env
     ports:
       - "8000:8000"
     environment:
       - DISABLE_DOTENV=1
+      - APP_RUN_CREATE_DB_ON_STARTUP=true
       - DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL}
-      - LLM_MODEL=${LLM_MODEL}
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_USER=user@example.com
-      - SMTP_PASSWORD=email_password
-      - BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173
     depends_on:
       db:
         condition: service_healthy
@@ -80,19 +69,12 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.worker.celery_app worker --loglevel=info
     env_file:
-      - ./.env
-    volumes:
-      - ./backend:/app
+      - ./backend/.env
     environment:
       - DISABLE_DOTENV=1
       - DATABASE_URL=postgresql://legal_diff_user:dev123@db:5432/legal_diff
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - SECRET_KEY=sdkljfhdlskfjkl3489r79fjisfklj0342
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL}
-      - LLM_MODEL=${LLM_MODEL}
     depends_on:
       - api
       - db

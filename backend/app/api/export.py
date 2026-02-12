@@ -91,7 +91,8 @@ async def export_excel(
 ):
     """
     FR-9: Generate Excel report with changes
-    Columns: ДЕЙСТВУЮЩАЯ НОРМА НК РФ, НОВАЯ НОРМА, ИЗМЕНЯЕМАЯ/ВВОДИМАЯ НОРМА, ДАТА ВСТУПЛЕНИЯ, КОММЕНТАРИИ
+    Columns: ДЕЙСТВУЮЩАЯ НОРМА НК РФ, НОВАЯ НОРМА, ИЗМЕНЯЕМАЯ/ВВОДИМАЯ НОРМА И ДАТА ВСТУПЛЕНИЯ В ДЕЙСТВИЕ
+    Shows only changed paragraphs (not full article), with bold highlighting on changes.
     """
     if not snapshot_id and not workspace_file_id:
         raise HTTPException(
